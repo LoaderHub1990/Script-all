@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
@@ -19,9 +18,6 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CyberNuvex"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
-
--- ===== ตรวจสอบว่าคือมือถือหรือไม่ =====
-local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 -- ===== ตัวแปรเก็บสถิติ =====
 local stats = {
@@ -173,11 +169,11 @@ local function getCurrentMap()
     end)
 end
 
--- ===== ฟังก์ชันสร้าง UI แบบปรับขนาดตามจอ =====
+-- ===== ฟังก์ชันสร้าง UI แบบปรับขนาดตามจอ (ไม่เต็มจอ) =====
 local function getScale()
     local viewportSize = workspace.CurrentCamera.ViewportSize
-    local scale = math.min(viewportSize.X / 800, viewportSize.Y / 600)
-    return math.max(scale, 0.5)
+    local scale = math.min(viewportSize.X / 1000, viewportSize.Y / 750)
+    return math.clamp(scale, 0.45, 0.85)
 end
 
 -- ===== เมนูหลัก (หน้า 1) =====
@@ -190,7 +186,7 @@ CreateMainMenu = function()
     end
 
     local scale = getScale()
-    local frameSize = UDim2.new(0, 580 * scale, 0, 380 * scale)
+    local frameSize = UDim2.new(0, 520 * scale, 0, 340 * scale)
 
     local Main = Instance.new("Frame", ScreenGui)
     Main.Name = "MainMenu"
@@ -225,7 +221,7 @@ CreateMainMenu = function()
     end)
 
     local Corner = Instance.new("UICorner", Main)
-    Corner.CornerRadius = UDim.new(0, 25 * scale)
+    Corner.CornerRadius = UDim.new(0, 20 * scale)
 
     local BGGradient = Instance.new("UIGradient", Main)
     BGGradient.Color = ColorSequence.new({
@@ -245,13 +241,13 @@ CreateMainMenu = function()
 
     -- Avatar
     local AvatarFrame = Instance.new("Frame", Main)
-    AvatarFrame.Size = UDim2.new(0, 160 * scale, 0, 200 * scale)
-    AvatarFrame.Position = UDim2.new(0, 25 * scale, 0.5, 0)
+    AvatarFrame.Size = UDim2.new(0, 140 * scale, 0, 180 * scale)
+    AvatarFrame.Position = UDim2.new(0, 20 * scale, 0.5, 0)
     AvatarFrame.AnchorPoint = Vector2.new(0, 0.5)
     AvatarFrame.BackgroundTransparency = 1
 
     local AvatarCircle = Instance.new("Frame", AvatarFrame)
-    AvatarCircle.Size = UDim2.new(0, 160 * scale, 0, 160 * scale)
+    AvatarCircle.Size = UDim2.new(0, 140 * scale, 0, 140 * scale)
     AvatarCircle.Position = UDim2.new(0.5, 0, 0, 0)
     AvatarCircle.AnchorPoint = Vector2.new(0.5, 0)
     AvatarCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -284,68 +280,68 @@ CreateMainMenu = function()
     Instance.new("UICorner", AvatarImage).CornerRadius = UDim.new(1, 0)
 
     local AvatarName = Instance.new("TextLabel", AvatarFrame)
-    AvatarName.Size = UDim2.new(1, 0, 0, 30 * scale)
+    AvatarName.Size = UDim2.new(1, 0, 0, 25 * scale)
     AvatarName.Position = UDim2.new(0, 0, 1, 5 * scale)
     AvatarName.BackgroundTransparency = 1
     AvatarName.Text = "Xenon บุคคลลับ"
     AvatarName.TextColor3 = Color3.fromRGB(30, 30, 50)
     AvatarName.Font = Enum.Font.GothamBold
-    AvatarName.TextSize = 18 * scale
+    AvatarName.TextSize = 16 * scale
     AvatarName.TextXAlignment = Enum.TextXAlignment.Center
 
     -- ข้อความขวา
     local DevName = Instance.new("TextLabel", Main)
-    DevName.Size = UDim2.new(0, 340 * scale, 0, 50 * scale)
-    DevName.Position = UDim2.new(0, 205 * scale, 0, 25 * scale)
+    DevName.Size = UDim2.new(0, 300 * scale, 0, 45 * scale)
+    DevName.Position = UDim2.new(0, 180 * scale, 0, 20 * scale)
     DevName.BackgroundTransparency = 1
     DevName.Text = "Luader HUB"
     DevName.TextColor3 = Color3.fromRGB(30, 30, 50)
     DevName.Font = Enum.Font.GothamBlack
-    DevName.TextSize = 30 * scale
+    DevName.TextSize = 28 * scale
     DevName.TextXAlignment = Enum.TextXAlignment.Left
 
     local Line = Instance.new("Frame", Main)
-    Line.Size = UDim2.new(0, 340 * scale, 0, 2)
-    Line.Position = UDim2.new(0, 205 * scale, 0, 80 * scale)
+    Line.Size = UDim2.new(0, 300 * scale, 0, 2)
+    Line.Position = UDim2.new(0, 180 * scale, 0, 70 * scale)
     Line.BackgroundColor3 = Color3.fromRGB(200, 180, 200)
     Line.BorderSizePixel = 0
 
     local DevDesc = Instance.new("TextLabel", Main)
-    DevDesc.Size = UDim2.new(0, 340 * scale, 0, 120 * scale)
-    DevDesc.Position = UDim2.new(0, 205 * scale, 0, 95 * scale)
+    DevDesc.Size = UDim2.new(0, 300 * scale, 0, 100 * scale)
+    DevDesc.Position = UDim2.new(0, 180 * scale, 0, 85 * scale)
     DevDesc.BackgroundTransparency = 1
-    DevDesc.Text = "👑 Luader Premium\n📌 เวอร์ชันภาษาไทย\n\n✨ ติดตามผลงานเพิ่มเติมได้ที่\nDiscord: Luader"
+    DevDesc.Text = "👑 Luader Premium\n📌 เวอร์ชันภาษาไทย\n\n✨ ติดตามผลงานได้ที่\nDiscord: Luader"
     DevDesc.TextColor3 = Color3.fromRGB(60, 60, 80)
     DevDesc.Font = Enum.Font.GothamMedium
-    DevDesc.TextSize = 15 * scale
+    DevDesc.TextSize = 14 * scale
     DevDesc.TextXAlignment = Enum.TextXAlignment.Left
     DevDesc.TextYAlignment = Enum.TextYAlignment.Top
     DevDesc.TextWrapped = true
 
     -- ปุ่ม
     local ButtonFrame = Instance.new("Frame", Main)
-    ButtonFrame.Size = UDim2.new(0, 340 * scale, 0, 50 * scale)
-    ButtonFrame.Position = UDim2.new(0, 205 * scale, 1, -30 * scale)
+    ButtonFrame.Size = UDim2.new(0, 300 * scale, 0, 45 * scale)
+    ButtonFrame.Position = UDim2.new(0, 180 * scale, 1, -25 * scale)
     ButtonFrame.AnchorPoint = Vector2.new(0, 1)
     ButtonFrame.BackgroundTransparency = 1
 
     local NextBtn = Instance.new("TextButton", ButtonFrame)
-    NextBtn.Size = UDim2.new(0, 150 * scale, 0, 45 * scale)
+    NextBtn.Size = UDim2.new(0, 135 * scale, 0, 40 * scale)
     NextBtn.Position = UDim2.new(1, 0, 0.5, 0)
     NextBtn.AnchorPoint = Vector2.new(1, 0.5)
     NextBtn.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
     NextBtn.Text = "NEXT"
     NextBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     NextBtn.Font = Enum.Font.GothamBold
-    NextBtn.TextSize = 18 * scale
+    NextBtn.TextSize = 16 * scale
     NextBtn.BorderSizePixel = 0
-    Instance.new("UICorner", NextBtn).CornerRadius = UDim.new(0, 12 * scale)
+    Instance.new("UICorner", NextBtn).CornerRadius = UDim.new(0, 10 * scale)
 
     NextBtn.MouseEnter:Connect(function()
-        TweenService:Create(NextBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 180, 255), Size = UDim2.new(0, 160 * scale, 0, 48 * scale)}):Play()
+        TweenService:Create(NextBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 180, 255), Size = UDim2.new(0, 145 * scale, 0, 43 * scale)}):Play()
     end)
     NextBtn.MouseLeave:Connect(function()
-        TweenService:Create(NextBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(135, 206, 250), Size = UDim2.new(0, 150 * scale, 0, 45 * scale)}):Play()
+        TweenService:Create(NextBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(135, 206, 250), Size = UDim2.new(0, 135 * scale, 0, 40 * scale)}):Play()
     end)
 
     NextBtn.MouseButton1Click:Connect(function()
@@ -358,22 +354,22 @@ CreateMainMenu = function()
     end)
 
     local CloseBtn = Instance.new("TextButton", ButtonFrame)
-    CloseBtn.Size = UDim2.new(0, 150 * scale, 0, 45 * scale)
+    CloseBtn.Size = UDim2.new(0, 135 * scale, 0, 40 * scale)
     CloseBtn.Position = UDim2.new(0, 0, 0.5, 0)
     CloseBtn.AnchorPoint = Vector2.new(0, 0.5)
     CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 120)
     CloseBtn.Text = "CLOSE"
     CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     CloseBtn.Font = Enum.Font.GothamBold
-    CloseBtn.TextSize = 18 * scale
+    CloseBtn.TextSize = 16 * scale
     CloseBtn.BorderSizePixel = 0
-    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 12 * scale)
+    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 10 * scale)
 
     CloseBtn.MouseEnter:Connect(function()
-        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 70, 90), Size = UDim2.new(0, 160 * scale, 0, 48 * scale)}):Play()
+        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 70, 90), Size = UDim2.new(0, 145 * scale, 0, 43 * scale)}):Play()
     end)
     CloseBtn.MouseLeave:Connect(function()
-        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 100, 120), Size = UDim2.new(0, 150 * scale, 0, 45 * scale)}):Play()
+        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 100, 120), Size = UDim2.new(0, 135 * scale, 0, 40 * scale)}):Play()
     end)
 
     CloseBtn.MouseButton1Click:Connect(function()
@@ -394,7 +390,7 @@ end
 -- ===== เมนูโปรไฟล์ (หน้า 2) =====
 CreateProfileMenu = function()
     local scale = getScale()
-    local frameSize = UDim2.new(0, 460 * scale, 0, 490 * scale)
+    local frameSize = UDim2.new(0, 420 * scale, 0, 440 * scale)
 
     local Menu = Instance.new("Frame", ScreenGui)
     Menu.Name = "ProfileMenu"
@@ -429,7 +425,7 @@ CreateProfileMenu = function()
     end)
 
     local Corner = Instance.new("UICorner", Menu)
-    Corner.CornerRadius = UDim.new(0, 25 * scale)
+    Corner.CornerRadius = UDim.new(0, 20 * scale)
 
     local BGGradient = Instance.new("UIGradient", Menu)
     BGGradient.Color = ColorSequence.new({
@@ -448,27 +444,27 @@ CreateProfileMenu = function()
     end)
 
     local Header = Instance.new("TextLabel", Menu)
-    Header.Size = UDim2.new(1, -40 * scale, 0, 40 * scale)
+    Header.Size = UDim2.new(1, -30 * scale, 0, 35 * scale)
     Header.Position = UDim2.new(0.5, 0, 0, 10 * scale)
     Header.AnchorPoint = Vector2.new(0.5, 0)
     Header.BackgroundTransparency = 1
     Header.Text = "👤 โปรไฟล์ผู้ใช้"
     Header.TextColor3 = Color3.fromRGB(30, 30, 50)
     Header.Font = Enum.Font.GothamBlack
-    Header.TextSize = 26 * scale
+    Header.TextSize = 24 * scale
     Header.TextXAlignment = Enum.TextXAlignment.Center
 
     local Line1 = Instance.new("Frame", Menu)
-    Line1.Size = UDim2.new(0, 400 * scale, 0, 2)
-    Line1.Position = UDim2.new(0.5, 0, 0, 55 * scale)
+    Line1.Size = UDim2.new(0, 360 * scale, 0, 2)
+    Line1.Position = UDim2.new(0.5, 0, 0, 50 * scale)
     Line1.AnchorPoint = Vector2.new(0.5, 0)
     Line1.BackgroundColor3 = Color3.fromRGB(200, 180, 200)
     Line1.BorderSizePixel = 0
 
     -- Avatar
     local AvatarCircle = Instance.new("Frame", Menu)
-    AvatarCircle.Size = UDim2.new(0, 80 * scale, 0, 80 * scale)
-    AvatarCircle.Position = UDim2.new(0.5, 0, 0, 70 * scale)
+    AvatarCircle.Size = UDim2.new(0, 70 * scale, 0, 70 * scale)
+    AvatarCircle.Position = UDim2.new(0.5, 0, 0, 65 * scale)
     AvatarCircle.AnchorPoint = Vector2.new(0.5, 0)
     AvatarCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     AvatarCircle.BorderSizePixel = 0
@@ -492,7 +488,7 @@ CreateProfileMenu = function()
     end)
 
     local AvatarImage = Instance.new("ImageLabel", AvatarCircle)
-    AvatarImage.Size = UDim2.new(1, -6 * scale, 1, -6 * scale)
+    AvatarImage.Size = UDim2.new(1, -5 * scale, 1, -5 * scale)
     AvatarImage.Position = UDim2.new(0.5, 0, 0.5, 0)
     AvatarImage.AnchorPoint = Vector2.new(0.5, 0.5)
     AvatarImage.BackgroundTransparency = 1
@@ -500,24 +496,24 @@ CreateProfileMenu = function()
     Instance.new("UICorner", AvatarImage).CornerRadius = UDim.new(1, 0)
 
     local PlayerName = Instance.new("TextLabel", Menu)
-    PlayerName.Size = UDim2.new(1, -40 * scale, 0, 30 * scale)
-    PlayerName.Position = UDim2.new(0.5, 0, 0, 160 * scale)
+    PlayerName.Size = UDim2.new(1, -30 * scale, 0, 28 * scale)
+    PlayerName.Position = UDim2.new(0.5, 0, 0, 145 * scale)
     PlayerName.AnchorPoint = Vector2.new(0.5, 0)
     PlayerName.BackgroundTransparency = 1
     PlayerName.Text = Players.LocalPlayer.DisplayName
     PlayerName.TextColor3 = Color3.fromRGB(30, 30, 50)
     PlayerName.Font = Enum.Font.GothamBold
-    PlayerName.TextSize = 22 * scale
+    PlayerName.TextSize = 20 * scale
     PlayerName.TextXAlignment = Enum.TextXAlignment.Center
 
     local InfoFrame = Instance.new("Frame", Menu)
-    InfoFrame.Size = UDim2.new(0, 400 * scale, 0, 230 * scale)
-    InfoFrame.Position = UDim2.new(0.5, 0, 0, 200 * scale)
+    InfoFrame.Size = UDim2.new(0, 360 * scale, 0, 200 * scale)
+    InfoFrame.Position = UDim2.new(0.5, 0, 0, 185 * scale)
     InfoFrame.AnchorPoint = Vector2.new(0.5, 0)
     InfoFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     InfoFrame.BackgroundTransparency = 0.3
     InfoFrame.BorderSizePixel = 0
-    Instance.new("UICorner", InfoFrame).CornerRadius = UDim.new(0, 12 * scale)
+    Instance.new("UICorner", InfoFrame).CornerRadius = UDim.new(0, 10 * scale)
 
     local InfoStroke = Instance.new("UIStroke", InfoFrame)
     InfoStroke.Thickness = 1
@@ -531,11 +527,10 @@ CreateProfileMenu = function()
         {icon = "👥", label = "เพื่อน:", value = stats.friendsCount},
         {icon = "📢", label = "ผู้ติดตาม:", value = stats.followersCount},
         {icon = "🗺️", label = "กำลังเล่น:", value = stats.currentMap},
-        {icon = "🔄", label = "เปิดใช้งาน:", value = stats.totalRuns .. " ครั้ง"},
         {icon = "⏱️", label = "เวลาที่ใช้:", value = formatTime(stats.totalTime)},
     }
 
-    local yPos = 8 * scale
+    local yPos = 6 * scale
     for i, data in ipairs(infoData) do
         if i > 1 then
             local divider = Instance.new("Frame", InfoFrame)
@@ -548,64 +543,64 @@ CreateProfileMenu = function()
         end
 
         local row = Instance.new("Frame", InfoFrame)
-        row.Size = UDim2.new(1, -20 * scale, 0, 22 * scale)
+        row.Size = UDim2.new(1, -15 * scale, 0, 20 * scale)
         row.Position = UDim2.new(0.5, 0, 0, yPos)
         row.AnchorPoint = Vector2.new(0.5, 0)
         row.BackgroundTransparency = 1
 
         local iconLabel = Instance.new("TextLabel", row)
-        iconLabel.Size = UDim2.new(0, 30 * scale, 1, 0)
+        iconLabel.Size = UDim2.new(0, 25 * scale, 1, 0)
         iconLabel.Position = UDim2.new(0, 0, 0.5, 0)
         iconLabel.AnchorPoint = Vector2.new(0, 0.5)
         iconLabel.BackgroundTransparency = 1
         iconLabel.Text = data.icon
         iconLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
         iconLabel.Font = Enum.Font.GothamBold
-        iconLabel.TextSize = 15 * scale
+        iconLabel.TextSize = 14 * scale
         iconLabel.TextXAlignment = Enum.TextXAlignment.Center
 
         local label = Instance.new("TextLabel", row)
-        label.Size = UDim2.new(0, 95 * scale, 1, 0)
-        label.Position = UDim2.new(0, 35 * scale, 0.5, 0)
+        label.Size = UDim2.new(0, 85 * scale, 1, 0)
+        label.Position = UDim2.new(0, 30 * scale, 0.5, 0)
         label.AnchorPoint = Vector2.new(0, 0.5)
         label.BackgroundTransparency = 1
         label.Text = data.label
         label.TextColor3 = Color3.fromRGB(80, 80, 100)
         label.Font = Enum.Font.GothamMedium
-        label.TextSize = 13 * scale
+        label.TextSize = 12 * scale
         label.TextXAlignment = Enum.TextXAlignment.Left
 
         local value = Instance.new("TextLabel", row)
-        value.Size = UDim2.new(0, 230 * scale, 1, 0)
+        value.Size = UDim2.new(0, 210 * scale, 1, 0)
         value.Position = UDim2.new(1, 0, 0.5, 0)
         value.AnchorPoint = Vector2.new(1, 0.5)
         value.BackgroundTransparency = 1
         value.Text = data.value
         value.TextColor3 = Color3.fromRGB(30, 30, 50)
         value.Font = Enum.Font.GothamBold
-        value.TextSize = 13 * scale
+        value.TextSize = 12 * scale
         value.TextXAlignment = Enum.TextXAlignment.Right
 
-        yPos = yPos + 24 * scale
+        yPos = yPos + 22 * scale
     end
 
     local ButtonFrame = Instance.new("Frame", Menu)
-    ButtonFrame.Size = UDim2.new(0, 400 * scale, 0, 50 * scale)
-    ButtonFrame.Position = UDim2.new(0.5, 0, 1, -12 * scale)
+    ButtonFrame.Size = UDim2.new(0, 360 * scale, 0, 45 * scale)
+    ButtonFrame.Position = UDim2.new(0.5, 0, 1, -10 * scale)
     ButtonFrame.AnchorPoint = Vector2.new(0.5, 1)
     ButtonFrame.BackgroundTransparency = 1
 
     local BackBtn = Instance.new("TextButton", ButtonFrame)
-    BackBtn.Size = UDim2.new(0, 120 * scale, 0, 40 * scale)
+    BackBtn.Size = UDim2.new(0, 100 * scale, 0, 36 * scale)
     BackBtn.Position = UDim2.new(0, 0, 0.5, 0)
     BackBtn.AnchorPoint = Vector2.new(0, 0.5)
     BackBtn.BackgroundColor3 = Color3.fromRGB(220, 220, 230)
     BackBtn.Text = "BACK"
     BackBtn.TextColor3 = Color3.fromRGB(50, 50, 70)
     BackBtn.Font = Enum.Font.GothamBold
-    BackBtn.TextSize = 16 * scale
+    BackBtn.TextSize = 14 * scale
     BackBtn.BorderSizePixel = 0
-    Instance.new("UICorner", BackBtn).CornerRadius = UDim.new(0, 12 * scale)
+    Instance.new("UICorner", BackBtn).CornerRadius = UDim.new(0, 10 * scale)
 
     BackBtn.MouseEnter:Connect(function()
         TweenService:Create(BackBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(200, 200, 210)}):Play()
@@ -624,16 +619,16 @@ CreateProfileMenu = function()
     end)
 
     local NextBtn = Instance.new("TextButton", ButtonFrame)
-    NextBtn.Size = UDim2.new(0, 120 * scale, 0, 40 * scale)
+    NextBtn.Size = UDim2.new(0, 100 * scale, 0, 36 * scale)
     NextBtn.Position = UDim2.new(1, 0, 0.5, 0)
     NextBtn.AnchorPoint = Vector2.new(1, 0.5)
     NextBtn.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
     NextBtn.Text = "NEXT"
     NextBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     NextBtn.Font = Enum.Font.GothamBold
-    NextBtn.TextSize = 16 * scale
+    NextBtn.TextSize = 14 * scale
     NextBtn.BorderSizePixel = 0
-    Instance.new("UICorner", NextBtn).CornerRadius = UDim.new(0, 12 * scale)
+    Instance.new("UICorner", NextBtn).CornerRadius = UDim.new(0, 10 * scale)
 
     NextBtn.MouseEnter:Connect(function()
         TweenService:Create(NextBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 180, 255)}):Play()
@@ -661,7 +656,7 @@ end
 -- ===== เมนูเลือกสคริปต์ (หน้า 3) =====
 CreateScriptMenu = function()
     local scale = getScale()
-    local frameSize = UDim2.new(0, 580 * scale, 0, 400 * scale)
+    local frameSize = UDim2.new(0, 520 * scale, 0, 360 * scale)
 
     local Menu = Instance.new("Frame", ScreenGui)
     Menu.Name = "ScriptMenu"
@@ -696,7 +691,7 @@ CreateScriptMenu = function()
     end)
 
     local Corner = Instance.new("UICorner", Menu)
-    Corner.CornerRadius = UDim.new(0, 25 * scale)
+    Corner.CornerRadius = UDim.new(0, 20 * scale)
 
     local BGGradient = Instance.new("UIGradient", Menu)
     BGGradient.Color = ColorSequence.new({
@@ -716,14 +711,14 @@ CreateScriptMenu = function()
 
     -- หัวข้อ
     local Header = Instance.new("TextLabel", Menu)
-    Header.Size = UDim2.new(0, 500 * scale, 0, 50 * scale)
-    Header.Position = UDim2.new(0.5, 0, 0, 15 * scale)
+    Header.Size = UDim2.new(0, 450 * scale, 0, 45 * scale)
+    Header.Position = UDim2.new(0.5, 0, 0, 12 * scale)
     Header.AnchorPoint = Vector2.new(0.5, 0)
     Header.BackgroundTransparency = 1
-    Header.Text = "📜 เลือกสคริปต์ที่ต้องการ"
+    Header.Text = "📜 เลือกสคริปต์"
     Header.TextColor3 = Color3.fromRGB(30, 30, 50)
     Header.Font = Enum.Font.GothamBlack
-    Header.TextSize = 28 * scale
+    Header.TextSize = 24 * scale
     Header.TextXAlignment = Enum.TextXAlignment.Center
     Header.TextScaled = true
 
@@ -735,53 +730,53 @@ CreateScriptMenu = function()
             scaleAnim = scaleAnim + (dir * 0.005)
             if scaleAnim > 1.05 then dir = -1 end
             if scaleAnim < 0.95 then dir = 1 end
-            Header.TextSize = 28 * scale * scaleAnim
+            Header.TextSize = 24 * scale * scaleAnim
         end
     end)
 
     -- แถบผู้ใช้
     local UserBar = Instance.new("Frame", Menu)
-    UserBar.Size = UDim2.new(0, 480 * scale, 0, 36 * scale)
-    UserBar.Position = UDim2.new(0.5, 0, 0, 75 * scale)
+    UserBar.Size = UDim2.new(0, 430 * scale, 0, 32 * scale)
+    UserBar.Position = UDim2.new(0.5, 0, 0, 65 * scale)
     UserBar.AnchorPoint = Vector2.new(0.5, 0)
     UserBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     UserBar.BackgroundTransparency = 0.2
     UserBar.BorderSizePixel = 0
-    Instance.new("UICorner", UserBar).CornerRadius = UDim.new(0, 10 * scale)
+    Instance.new("UICorner", UserBar).CornerRadius = UDim.new(0, 8 * scale)
 
     local UserBarStroke = Instance.new("UIStroke", UserBar)
     UserBarStroke.Thickness = 1
     UserBarStroke.Color = Color3.fromRGB(200, 190, 200)
 
     local MiniAvatar = Instance.new("ImageLabel", UserBar)
-    MiniAvatar.Size = UDim2.new(0, 28 * scale, 0, 28 * scale)
-    MiniAvatar.Position = UDim2.new(0, 10 * scale, 0.5, 0)
+    MiniAvatar.Size = UDim2.new(0, 24 * scale, 0, 24 * scale)
+    MiniAvatar.Position = UDim2.new(0, 8 * scale, 0.5, 0)
     MiniAvatar.AnchorPoint = Vector2.new(0, 0.5)
     MiniAvatar.BackgroundTransparency = 1
     MiniAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. Players.LocalPlayer.UserId .. "&width=60&height=60&format=png"
     Instance.new("UICorner", MiniAvatar).CornerRadius = UDim.new(1, 0)
 
     local UserText = Instance.new("TextLabel", UserBar)
-    UserText.Size = UDim2.new(1, -50 * scale, 1, 0)
-    UserText.Position = UDim2.new(0, 45 * scale, 0.5, 0)
+    UserText.Size = UDim2.new(1, -40 * scale, 1, 0)
+    UserText.Position = UDim2.new(0, 38 * scale, 0.5, 0)
     UserText.AnchorPoint = Vector2.new(0, 0.5)
     UserText.BackgroundTransparency = 1
     UserText.Text = Players.LocalPlayer.DisplayName .. "  |  ⏱️ " .. formatTime(stats.totalTime)
     UserText.TextColor3 = Color3.fromRGB(50, 50, 70)
     UserText.Font = Enum.Font.GothamMedium
-    UserText.TextSize = 15 * scale
+    UserText.TextSize = 13 * scale
     UserText.TextXAlignment = Enum.TextXAlignment.Left
 
     -- สถานะ
     local StatusFrame = Instance.new("Frame", Menu)
-    StatusFrame.Size = UDim2.new(0, 480 * scale, 0, 30 * scale)
-    StatusFrame.Position = UDim2.new(0.5, 0, 0, 118 * scale)
+    StatusFrame.Size = UDim2.new(0, 430 * scale, 0, 26 * scale)
+    StatusFrame.Position = UDim2.new(0.5, 0, 0, 103 * scale)
     StatusFrame.AnchorPoint = Vector2.new(0.5, 0)
     StatusFrame.BackgroundTransparency = 1
 
     local StatusDot = Instance.new("Frame", StatusFrame)
-    StatusDot.Size = UDim2.new(0, 12 * scale, 0, 12 * scale)
-    StatusDot.Position = UDim2.new(0.5, -90 * scale, 0.5, 0)
+    StatusDot.Size = UDim2.new(0, 10 * scale, 0, 10 * scale)
+    StatusDot.Position = UDim2.new(0.5, -80 * scale, 0.5, 0)
     StatusDot.AnchorPoint = Vector2.new(0.5, 0.5)
     StatusDot.BackgroundColor3 = stats.isRunning and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
     StatusDot.BorderSizePixel = 0
@@ -795,55 +790,55 @@ CreateScriptMenu = function()
             pulse = pulse + (dir * 0.02)
             if pulse > 1.3 then dir = -1 end
             if pulse < 0.7 then dir = 1 end
-            StatusDot.Size = UDim2.new(0, 12 * scale * pulse, 0, 12 * scale * pulse)
+            StatusDot.Size = UDim2.new(0, 10 * scale * pulse, 0, 10 * scale * pulse)
         end
     end)
 
     local StatusText = Instance.new("TextLabel", StatusFrame)
-    StatusText.Size = UDim2.new(0, 200 * scale, 1, 0)
-    StatusText.Position = UDim2.new(0.5, -60 * scale, 0.5, 0)
+    StatusText.Size = UDim2.new(0, 180 * scale, 1, 0)
+    StatusText.Position = UDim2.new(0.5, -55 * scale, 0.5, 0)
     StatusText.AnchorPoint = Vector2.new(0, 0.5)
     StatusText.BackgroundTransparency = 1
     StatusText.Text = stats.isRunning and "🟢 กำลังรัน: " .. stats.currentScript or "🔴 หยุดรัน"
     StatusText.TextColor3 = stats.isRunning and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
     StatusText.Font = Enum.Font.GothamMedium
-    StatusText.TextSize = 14 * scale
+    StatusText.TextSize = 12 * scale
     StatusText.TextXAlignment = Enum.TextXAlignment.Left
 
     -- เส้นแบ่ง
     local Line1 = Instance.new("Frame", Menu)
-    Line1.Size = UDim2.new(0, 480 * scale, 0, 2)
-    Line1.Position = UDim2.new(0.5, 0, 0, 155 * scale)
+    Line1.Size = UDim2.new(0, 430 * scale, 0, 2)
+    Line1.Position = UDim2.new(0.5, 0, 0, 135 * scale)
     Line1.AnchorPoint = Vector2.new(0.5, 0)
     Line1.BackgroundColor3 = Color3.fromRGB(200, 180, 200)
     Line1.BorderSizePixel = 0
 
     -- ScrollingFrame
     local ScrollFrame = Instance.new("ScrollingFrame", Menu)
-    ScrollFrame.Size = UDim2.new(0, 480 * scale, 0, 180 * scale)
-    ScrollFrame.Position = UDim2.new(0.5, 0, 0, 165 * scale)
+    ScrollFrame.Size = UDim2.new(0, 430 * scale, 0, 160 * scale)
+    ScrollFrame.Position = UDim2.new(0.5, 0, 0, 145 * scale)
     ScrollFrame.AnchorPoint = Vector2.new(0.5, 0)
     ScrollFrame.BackgroundTransparency = 1
     ScrollFrame.BorderSizePixel = 0
     ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    ScrollFrame.ScrollBarThickness = 5
+    ScrollFrame.ScrollBarThickness = 4
     ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(135, 206, 250)
     ScrollFrame.ClipsDescendants = true
 
     -- ปุ่มสคริปต์
     local scripts = {
-        {name = "🔹 ดูดหี", url = "https://pastefy.app/pdyJZFgt/raw", color = Color3.fromRGB(200, 220, 255)},
-        {name = "🔸 บิน", url = "https://pastefy.app/VREzzwKI/raw", color = Color3.fromRGB(220, 240, 255)},
-        {name = "🔹 หมุนไว้ติ้วหีเเม่มึง", url = "https://pastefy.app/YzRS8gQQ/raw", color = Color3.fromRGB(200, 220, 255)},
-        {name = "🔸 เฮรีค๊อปเตอร์", url = "https://pastefy.app/lnFQ7Ilx/raw", color = Color3.fromRGB(220, 240, 255)},
-        {name = "🔹 ยังไม่ได้ลง SCript", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔹 GUI เก่า", url = "https://raw.githubusercontent.com/wackshopr-tech/script-roblox-all/refs/heads/main/Gui-Old.lua", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔸 GUI ใหม่", url = "https://raw.githubusercontent.com/wackshopr-tech/script-roblox-all/refs/heads/main/Gui-New.lua", color = Color3.fromRGB(220, 240, 255)},
+        {name = "🔹 Script 3", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔸 Script 4", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(220, 240, 255)},
+        {name = "🔹 Script 5", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
     }
 
     local selectedBtn = nil
 
     local function CreateScriptButton(text, y, url, color)
         local btn = Instance.new("TextButton", ScrollFrame)
-        btn.Size = UDim2.new(1, -20 * scale, 0, 42 * scale)
+        btn.Size = UDim2.new(1, -15 * scale, 0, 36 * scale)
         btn.Position = UDim2.new(0.5, 0, 0, y * scale)
         btn.AnchorPoint = Vector2.new(0.5, 0)
         btn.BackgroundColor3 = color
@@ -851,10 +846,10 @@ CreateScriptMenu = function()
         btn.Text = text
         btn.TextColor3 = Color3.fromRGB(40, 40, 60)
         btn.Font = Enum.Font.GothamMedium
-        btn.TextSize = 16 * scale
+        btn.TextSize = 14 * scale
         btn.BorderSizePixel = 0
         btn.ClipsDescendants = true
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10 * scale)
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8 * scale)
 
         local btnStroke = Instance.new("UIStroke", btn)
         btnStroke.Thickness = 1
@@ -864,7 +859,7 @@ CreateScriptMenu = function()
             TweenService:Create(btn, TweenInfo.new(0.15), {
                 BackgroundTransparency = 0,
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                Size = UDim2.new(1, -10 * scale, 0, 46 * scale)
+                Size = UDim2.new(1, -8 * scale, 0, 40 * scale)
             }):Play()
             TweenService:Create(btnStroke, TweenInfo.new(0.15), {
                 Thickness = 2,
@@ -876,7 +871,7 @@ CreateScriptMenu = function()
             TweenService:Create(btn, TweenInfo.new(0.15), {
                 BackgroundTransparency = 0.3,
                 BackgroundColor3 = color,
-                Size = UDim2.new(1, -20 * scale, 0, 42 * scale)
+                Size = UDim2.new(1, -15 * scale, 0, 36 * scale)
             }):Play()
             TweenService:Create(btnStroke, TweenInfo.new(0.15), {
                 Thickness = 1,
@@ -885,9 +880,9 @@ CreateScriptMenu = function()
         end)
 
         btn.MouseButton1Click:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.1), {Size = UDim2.new(1, -20 * scale, 0, 38 * scale)}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.1), {Size = UDim2.new(1, -15 * scale, 0, 32 * scale)}):Play()
             task.wait(0.1)
-            TweenService:Create(btn, TweenInfo.new(0.1), {Size = UDim2.new(1, -20 * scale, 0, 42 * scale)}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.1), {Size = UDim2.new(1, -15 * scale, 0, 36 * scale)}):Play()
 
             if selectedBtn and selectedBtn ~= btn then
                 TweenService:Create(selectedBtn, TweenInfo.new(0.2), {
@@ -914,7 +909,7 @@ CreateScriptMenu = function()
             confirm.BackgroundTransparency = 1
             confirm.Size = UDim2.fromOffset(0, 0)
             confirm.ClipsDescendants = true
-            Instance.new("UICorner", confirm).CornerRadius = UDim.new(0, 15 * scale)
+            Instance.new("UICorner", confirm).CornerRadius = UDim.new(0, 12 * scale)
 
             local confirmStroke = Instance.new("UIStroke", confirm)
             confirmStroke.Thickness = 3
@@ -927,28 +922,28 @@ CreateScriptMenu = function()
             })
 
             local msg = Instance.new("TextLabel", confirm)
-            msg.Size = UDim2.new(1, -40 * scale, 0, 50 * scale)
-            msg.Position = UDim2.new(0.5, 0, 0, 20 * scale)
+            msg.Size = UDim2.new(1, -30 * scale, 0, 45 * scale)
+            msg.Position = UDim2.new(0.5, 0, 0, 15 * scale)
             msg.AnchorPoint = Vector2.new(0.5, 0)
             msg.BackgroundTransparency = 1
             msg.Text = "ต้องการรัน " .. text .. " ใช่ไหม?"
             msg.TextColor3 = Color3.fromRGB(30, 30, 50)
             msg.Font = Enum.Font.GothamBold
-            msg.TextSize = 18 * scale
+            msg.TextSize = 16 * scale
             msg.TextXAlignment = Enum.TextXAlignment.Center
             msg.TextWrapped = true
 
             local noBtn = Instance.new("TextButton", confirm)
-            noBtn.Size = UDim2.new(0, 130 * scale, 0, 40 * scale)
-            noBtn.Position = UDim2.new(0.25, 0, 1, -20 * scale)
+            noBtn.Size = UDim2.new(0, 110 * scale, 0, 35 * scale)
+            noBtn.Position = UDim2.new(0.25, 0, 1, -15 * scale)
             noBtn.AnchorPoint = Vector2.new(0.5, 1)
             noBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 120)
             noBtn.Text = "ปิด"
             noBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             noBtn.Font = Enum.Font.GothamBold
-            noBtn.TextSize = 16 * scale
+            noBtn.TextSize = 14 * scale
             noBtn.BorderSizePixel = 0
-            Instance.new("UICorner", noBtn).CornerRadius = UDim.new(0, 10 * scale)
+            Instance.new("UICorner", noBtn).CornerRadius = UDim.new(0, 8 * scale)
 
             noBtn.MouseEnter:Connect(function()
                 TweenService:Create(noBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(255, 70, 90)}):Play()
@@ -958,16 +953,16 @@ CreateScriptMenu = function()
             end)
 
             local yesBtn = Instance.new("TextButton", confirm)
-            yesBtn.Size = UDim2.new(0, 130 * scale, 0, 40 * scale)
-            yesBtn.Position = UDim2.new(0.75, 0, 1, -20 * scale)
+            yesBtn.Size = UDim2.new(0, 110 * scale, 0, 35 * scale)
+            yesBtn.Position = UDim2.new(0.75, 0, 1, -15 * scale)
             yesBtn.AnchorPoint = Vector2.new(0.5, 1)
             yesBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 150)
             yesBtn.Text = "ใช่"
             yesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             yesBtn.Font = Enum.Font.GothamBold
-            yesBtn.TextSize = 16 * scale
+            yesBtn.TextSize = 14 * scale
             yesBtn.BorderSizePixel = 0
-            Instance.new("UICorner", yesBtn).CornerRadius = UDim.new(0, 10 * scale)
+            Instance.new("UICorner", yesBtn).CornerRadius = UDim.new(0, 8 * scale)
 
             yesBtn.MouseEnter:Connect(function()
                 TweenService:Create(yesBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(80, 180, 130)}):Play()
@@ -977,7 +972,7 @@ CreateScriptMenu = function()
             end)
 
             TweenService:Create(confirm, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 400 * scale, 0, 160 * scale),
+                Size = UDim2.new(0, 360 * scale, 0, 140 * scale),
                 BackgroundTransparency = 0
             }):Play()
 
@@ -1012,37 +1007,37 @@ CreateScriptMenu = function()
 
     local buttonY = 0
     for i, s in ipairs(scripts) do
-        buttonY = (i - 1) * 48
+        buttonY = (i - 1) * 42
         CreateScriptButton(s.name, buttonY, s.url, s.color)
     end
     
-    local totalHeight = #scripts * 48 + 10
+    local totalHeight = #scripts * 42 + 10
     ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight * scale)
 
     -- ปุ่มด้านล่าง
     local BottomFrame = Instance.new("Frame", Menu)
-    BottomFrame.Size = UDim2.new(0, 480 * scale, 0, 50 * scale)
-    BottomFrame.Position = UDim2.new(0.5, 0, 1, -12 * scale)
+    BottomFrame.Size = UDim2.new(0, 430 * scale, 0, 45 * scale)
+    BottomFrame.Position = UDim2.new(0.5, 0, 1, -10 * scale)
     BottomFrame.AnchorPoint = Vector2.new(0.5, 1)
     BottomFrame.BackgroundTransparency = 1
 
     local BackBtn = Instance.new("TextButton", BottomFrame)
-    BackBtn.Size = UDim2.new(0, 110 * scale, 0, 40 * scale)
+    BackBtn.Size = UDim2.new(0, 95 * scale, 0, 35 * scale)
     BackBtn.Position = UDim2.new(0, 0, 0.5, 0)
     BackBtn.AnchorPoint = Vector2.new(0, 0.5)
     BackBtn.BackgroundColor3 = Color3.fromRGB(220, 220, 230)
     BackBtn.Text = "BACK"
     BackBtn.TextColor3 = Color3.fromRGB(50, 50, 70)
     BackBtn.Font = Enum.Font.GothamBold
-    BackBtn.TextSize = 16 * scale
+    BackBtn.TextSize = 14 * scale
     BackBtn.BorderSizePixel = 0
-    Instance.new("UICorner", BackBtn).CornerRadius = UDim.new(0, 10 * scale)
+    Instance.new("UICorner", BackBtn).CornerRadius = UDim.new(0, 8 * scale)
 
     BackBtn.MouseEnter:Connect(function()
-        TweenService:Create(BackBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(200, 200, 210), Size = UDim2.new(0, 120 * scale, 0, 43 * scale)}):Play()
+        TweenService:Create(BackBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(200, 200, 210), Size = UDim2.new(0, 105 * scale, 0, 38 * scale)}):Play()
     end)
     BackBtn.MouseLeave:Connect(function()
-        TweenService:Create(BackBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(220, 220, 230), Size = UDim2.new(0, 110 * scale, 0, 40 * scale)}):Play()
+        TweenService:Create(BackBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(220, 220, 230), Size = UDim2.new(0, 95 * scale, 0, 35 * scale)}):Play()
     end)
 
     BackBtn.MouseButton1Click:Connect(function()
@@ -1056,33 +1051,33 @@ CreateScriptMenu = function()
 
     -- Discord + IG
     local SocialFrame = Instance.new("Frame", BottomFrame)
-    SocialFrame.Size = UDim2.new(0, 220 * scale, 0, 40 * scale)
+    SocialFrame.Size = UDim2.new(0, 190 * scale, 0, 35 * scale)
     SocialFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     SocialFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     SocialFrame.BackgroundTransparency = 1
 
     local DiscordBtn = Instance.new("TextButton", SocialFrame)
-    DiscordBtn.Size = UDim2.new(0, 105 * scale, 0, 38 * scale)
+    DiscordBtn.Size = UDim2.new(0, 90 * scale, 0, 33 * scale)
     DiscordBtn.Position = UDim2.new(0, 0, 0.5, 0)
     DiscordBtn.AnchorPoint = Vector2.new(0, 0.5)
     DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
     DiscordBtn.Text = "Discord"
     DiscordBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     DiscordBtn.Font = Enum.Font.GothamBold
-    DiscordBtn.TextSize = 13 * scale
+    DiscordBtn.TextSize = 12 * scale
     DiscordBtn.BorderSizePixel = 0
-    Instance.new("UICorner", DiscordBtn).CornerRadius = UDim.new(0, 8 * scale)
+    Instance.new("UICorner", DiscordBtn).CornerRadius = UDim.new(0, 6 * scale)
 
     DiscordBtn.MouseEnter:Connect(function()
         TweenService:Create(DiscordBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(68, 81, 222),
-            Size = UDim2.new(0, 110 * scale, 0, 40 * scale)
+            Size = UDim2.new(0, 95 * scale, 0, 35 * scale)
         }):Play()
     end)
     DiscordBtn.MouseLeave:Connect(function()
         TweenService:Create(DiscordBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(88, 101, 242),
-            Size = UDim2.new(0, 105 * scale, 0, 38 * scale)
+            Size = UDim2.new(0, 90 * scale, 0, 33 * scale)
         }):Play()
     end)
 
@@ -1097,27 +1092,27 @@ CreateScriptMenu = function()
     end)
 
     local IgBtn = Instance.new("TextButton", SocialFrame)
-    IgBtn.Size = UDim2.new(0, 105 * scale, 0, 38 * scale)
+    IgBtn.Size = UDim2.new(0, 90 * scale, 0, 33 * scale)
     IgBtn.Position = UDim2.new(1, 0, 0.5, 0)
     IgBtn.AnchorPoint = Vector2.new(1, 0.5)
     IgBtn.BackgroundColor3 = Color3.fromRGB(225, 48, 108)
     IgBtn.Text = "Instagram"
     IgBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     IgBtn.Font = Enum.Font.GothamBold
-    IgBtn.TextSize = 13 * scale
+    IgBtn.TextSize = 12 * scale
     IgBtn.BorderSizePixel = 0
-    Instance.new("UICorner", IgBtn).CornerRadius = UDim.new(0, 8 * scale)
+    Instance.new("UICorner", IgBtn).CornerRadius = UDim.new(0, 6 * scale)
 
     IgBtn.MouseEnter:Connect(function()
         TweenService:Create(IgBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(205, 28, 88),
-            Size = UDim2.new(0, 110 * scale, 0, 40 * scale)
+            Size = UDim2.new(0, 95 * scale, 0, 35 * scale)
         }):Play()
     end)
     IgBtn.MouseLeave:Connect(function()
         TweenService:Create(IgBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(225, 48, 108),
-            Size = UDim2.new(0, 105 * scale, 0, 38 * scale)
+            Size = UDim2.new(0, 90 * scale, 0, 33 * scale)
         }):Play()
     end)
 
@@ -1133,27 +1128,27 @@ CreateScriptMenu = function()
 
     -- CLOSE
     local closeBtn = Instance.new("TextButton", Menu)
-    closeBtn.Size = UDim2.new(0, 35 * scale, 0, 35 * scale)
-    closeBtn.Position = UDim2.new(1, -12 * scale, 0, 12 * scale)
+    closeBtn.Size = UDim2.new(0, 30 * scale, 0, 30 * scale)
+    closeBtn.Position = UDim2.new(1, -10 * scale, 0, 10 * scale)
     closeBtn.AnchorPoint = Vector2.new(1, 0)
     closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
     closeBtn.Text = "X"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 18 * scale
+    closeBtn.TextSize = 16 * scale
     closeBtn.BorderSizePixel = 0
     Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 
     closeBtn.MouseEnter:Connect(function()
         TweenService:Create(closeBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(255, 50, 60),
-            Size = UDim2.new(0, 38 * scale, 0, 38 * scale)
+            Size = UDim2.new(0, 33 * scale, 0, 33 * scale)
         }):Play()
     end)
     closeBtn.MouseLeave:Connect(function()
         TweenService:Create(closeBtn, TweenInfo.new(0.15), {
             BackgroundColor3 = Color3.fromRGB(255, 80, 80),
-            Size = UDim2.new(0, 35 * scale, 0, 35 * scale)
+            Size = UDim2.new(0, 30 * scale, 0, 30 * scale)
         }):Play()
     end)
 

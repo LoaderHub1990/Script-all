@@ -827,11 +827,11 @@ CreateScriptMenu = function()
 
     -- ปุ่มสคริปต์
     local scripts = {
-        {name = "🔹 GUI เก่า", url = "https://raw.githubusercontent.com/wackshopr-tech/script-roblox-all/refs/heads/main/Gui-Old.lua", color = Color3.fromRGB(200, 220, 255)},
-        {name = "🔸 GUI ใหม่", url = "https://raw.githubusercontent.com/wackshopr-tech/script-roblox-all/refs/heads/main/Gui-New.lua", color = Color3.fromRGB(220, 240, 255)},
-        {name = "🔹 Script 3", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
-        {name = "🔸 Script 4", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(220, 240, 255)},
-        {name = "🔹 Script 5", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔹 ดูดหี", url = "https://pastefy.app/pdyJZFgt/raw", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔸 บิน", url = "https://pastefy.app/VREzzwKI/raw", color = Color3.fromRGB(220, 240, 255)},
+        {name = "🔹 หมุนไว้ติ้วหีเเม่มึง", url = "https://pastefy.app/YzRS8gQQ/raw", color = Color3.fromRGB(200, 220, 255)},
+        {name = "🔸 เฮรีค๊อปเตอร์", url = "https://pastefy.app/lnFQ7Ilx/raw", color = Color3.fromRGB(220, 240, 255)},
+        {name = "🔹 ยังไม่ได้ลง SCript", url = "https://pastefy.app/Tjyd3rQJ/raw", color = Color3.fromRGB(200, 220, 255)},
     }
 
     local selectedBtn = nil

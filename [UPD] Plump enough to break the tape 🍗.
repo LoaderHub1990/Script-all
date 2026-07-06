@@ -1,0 +1,376 @@
+-- ============ POINTS ============
+local Point1 = CFrame.new(0.7, 5029.0, -56.4)      -- จุดสูง
+local Point2 = CFrame.new(0.7, 1521.4, -6165.6)    -- จุดกลาง
+local Point3 = CFrame.new(0.2, 1517.2, -6190.3)    -- จุดล่าง
+
+local Point4 = CFrame.new(-5000.0, 8359.3, -177.2)  -- Auto Move1 จุดที่1
+local Point5 = CFrame.new(-4996.2, 485.5, -173.5)   -- Auto Move1 จุดที่2
+local Point6 = CFrame.new(-5000.3, 464.4, -223.7)   -- Auto Move1 จุดที่3
+
+-- พิกัดชุดที่ 3
+local Point7 = CFrame.new(-643.3, 5020.6, -81.8)    -- จุดสูง
+local Point8 = CFrame.new(-641.5, 1519.0, -6183.2)  -- จุดกลาง
+local Point9 = CFrame.new(-643.0, 1513.4, -6218.4)  -- จุดล่าง
+
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+-- ============ AUTO MOVE VARIABLES ============
+local Running1 = false  -- Auto Move1
+local Running2 = false  -- Auto Move2
+local Running3 = false  -- Auto Move3
+
+-- ============ AUTO EAT VARIABLES ============
+local isEating = false
+local eatConnection = nil
+local remoteEvent = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("Eat"):WaitForChild("PlayerTryClickRE")
+
+-- ============ AUTO RACE VARIABLES ============
+-- จุดที่ 1
+local isAutoRace1 = false
+local raceConnection1 = nil
+local raceRunning1 = false
+local RacePoint1 = CFrame.new(-3.1, 1521.0, -6167.5)
+
+-- จุดที่ 2
+local isAutoRace2 = false
+local raceConnection2 = nil
+local raceRunning2 = false
+local RacePoint2 = CFrame.new(-5001.8, 469.4, -175.4)
+
+-- จุดที่ 3
+local isAutoRace3 = false
+local raceConnection3 = nil
+local raceRunning3 = false
+local RacePoint3 = CFrame.new(-641.5, 1528.5, -6183.9)
+
+-- ============ AUTO MOVE FUNCTIONS ============
+local function getHRP()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
+end
+
+local function tweenTo(cf,time)
+    local tween = TweenService:Create(
+        getHRP(),
+        TweenInfo.new(time, Enum.EasingStyle.Linear),
+        {CFrame = cf}
+    )
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+local function teleport(cf)
+    getHRP().CFrame = cf
+end
+
+-- ============ AUTO EAT FUNCTIONS ============
+local function eat()
+    pcall(function()
+        remoteEvent:FireServer()
+    end)
+end
+
+-- ============ AUTO RACE FUNCTIONS ============
+local function endRace1()
+    if not raceRunning1 then return end
+    pcall(function()
+        local hrp = getHRP()
+        local randomOffset = Vector3.new(
+            math.random(-5, 5),
+            math.random(-2, 2),
+            math.random(-5, 5)
+        )
+        hrp.CFrame = RacePoint1 + randomOffset
+        local playerEndRace = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("Race"):WaitForChild("PlayerEndRace")
+        playerEndRace:FireServer()
+    end)
+end
+
+local function endRace2()
+    if not raceRunning2 then return end
+    pcall(function()
+        local hrp = getHRP()
+        local randomOffset = Vector3.new(
+            math.random(-5, 5),
+            math.random(-2, 2),
+            math.random(-5, 5)
+        )
+        hrp.CFrame = RacePoint2 + randomOffset
+        local playerEndRace = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("Race"):WaitForChild("PlayerEndRace")
+        playerEndRace:FireServer()
+    end)
+end
+
+local function endRace3()
+    if not raceRunning3 then return end
+    pcall(function()
+        local hrp = getHRP()
+        local randomOffset = Vector3.new(
+            math.random(-5, 5),
+            math.random(-2, 2),
+            math.random(-5, 5)
+        )
+        hrp.CFrame = RacePoint3 + randomOffset
+        local playerEndRace = ReplicatedStorage:WaitForChild("Remote"):WaitForChild("Event"):WaitForChild("Race"):WaitForChild("PlayerEndRace")
+        playerEndRace:FireServer()
+    end)
+end
+
+-- ============ AUTO MOVE LOOPS ============
+-- Auto Move2 (Point1 -> Point2 -> Point3) - อันแรก
+task.spawn(function()
+    while task.wait() do
+        if Running2 then
+            teleport(Point1)
+            task.wait(0.3)
+            tweenTo(Point2,8)
+            task.wait(2)
+            teleport(Point3)
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- Auto Move1 (Point4 -> Point5 -> Point6) - อันที่สอง
+task.spawn(function()
+    while task.wait() do
+        if Running1 then
+            teleport(Point4)
+            task.wait(0.3)
+            tweenTo(Point5,8)
+            task.wait(2)
+            teleport(Point6)
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- Auto Move3 (Point7 -> Point8 -> Point9) - อันที่สาม
+task.spawn(function()
+    while task.wait() do
+        if Running3 then
+            teleport(Point7)
+            task.wait(0.3)
+            tweenTo(Point8,8)
+            task.wait(2)
+            teleport(Point9)
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- ============ WIND UI ============
+local Window = WindUI:CreateWindow({
+    Title = "[UPD] Plump enough to break the tape 🍗.",
+    Icon = "user", -- ใส่ Asset ID ของคุณ
+    Author = "LoaderHub",
+    Folder = "LoaderHub",
+    Size = UDim2.fromOffset(500, 400),
+    Transparent = true,
+    Theme = "Dark",
+})
+
+-- ============ MAIN TAB ============
+local MainTab = Window:Tab({
+    Title = "Main",
+    Icon = "play"
+})
+
+-- Auto Move2 Toggle (อันแรก)
+MainTab:Toggle({
+    Title = "Auto Move2 (โลก1)",
+    Default = false,
+    Callback = function(state)
+        Running2 = state
+        if state then
+            Running1 = false
+            Running3 = false
+        end
+    end
+})
+
+-- Auto Move1 Toggle (อันที่สอง)
+MainTab:Toggle({
+    Title = "Auto Move1 (โลก2)",
+    Default = false,
+    Callback = function(state)
+        Running1 = state
+        if state then
+            Running2 = false
+            Running3 = false
+        end
+    end
+})
+
+-- Auto Move3 Toggle (อันที่สาม)
+MainTab:Toggle({
+    Title = "Auto Move3 (โลก3)",
+    Default = false,
+    Callback = function(state)
+        Running3 = state
+        if state then
+            Running1 = false
+            Running2 = false
+        end
+    end
+})
+
+-- ============ AUTO EAT TAB ============
+local EatTab = Window:Tab({
+    Title = "Auto Eat",
+    Icon = "rocket"
+})
+
+local eatToggle = EatTab:Toggle({
+    Title = "Auto Eat (Ultra Fast)",
+    Default = false,
+    Callback = function(state)
+        isEating = state
+        
+        if isEating then
+            if eatConnection then
+                eatConnection:Disconnect()
+            end
+            eatConnection = RunService.Stepped:Connect(function()
+                eat()
+            end)
+        else
+            if eatConnection then
+                eatConnection:Disconnect()
+                eatConnection = nil
+            end
+        end
+    end
+})
+
+-- ============ AUTO RACE TAB ============
+local RaceTab = Window:Tab({
+    Title = "Auto Race",
+    Icon = "flag"
+})
+
+-- จุดที่ 1
+RaceTab:Toggle({
+    Title = "Auto Race (โลก1)",
+    Default = false,
+    Callback = function(state)
+        isAutoRace1 = state
+        
+        if isAutoRace1 then
+            raceRunning1 = true
+            if raceConnection1 then
+                raceConnection1:Disconnect()
+                raceConnection1 = nil
+            end
+            raceConnection1 = RunService.Heartbeat:Connect(function()
+                endRace1()
+            end)
+            print("✅ เปิด Auto Race จุดที่ 1 แล้ว!")
+        else
+            raceRunning1 = false
+            if raceConnection1 then
+                raceConnection1:Disconnect()
+                raceConnection1 = nil
+            end
+            print("❌ ปิด Auto Race จุดที่ 1 แล้ว!")
+        end
+    end
+})
+
+-- จุดที่ 2
+RaceTab:Toggle({
+    Title = "Auto Race (โลก2)",
+    Default = false,
+    Callback = function(state)
+        isAutoRace2 = state
+        
+        if isAutoRace2 then
+            raceRunning2 = true
+            if raceConnection2 then
+                raceConnection2:Disconnect()
+                raceConnection2 = nil
+            end
+            raceConnection2 = RunService.Heartbeat:Connect(function()
+                endRace2()
+            end)
+            print("✅ เปิด Auto Race จุดที่ 2 แล้ว!")
+        else
+            raceRunning2 = false
+            if raceConnection2 then
+                raceConnection2:Disconnect()
+                raceConnection2 = nil
+            end
+            print("❌ ปิด Auto Race จุดที่ 2 แล้ว!")
+        end
+    end
+})
+
+-- จุดที่ 3
+RaceTab:Toggle({
+    Title = "Auto Race (โลก3)",
+    Default = false,
+    Callback = function(state)
+        isAutoRace3 = state
+        
+        if isAutoRace3 then
+            raceRunning3 = true
+            if raceConnection3 then
+                raceConnection3:Disconnect()
+                raceConnection3 = nil
+            end
+            raceConnection3 = RunService.Heartbeat:Connect(function()
+                endRace3()
+            end)
+            print("✅ เปิด Auto Race จุดที่ 3 แล้ว!")
+        else
+            raceRunning3 = false
+            if raceConnection3 then
+                raceConnection3:Disconnect()
+                raceConnection3 = nil
+            end
+            print("❌ ปิด Auto Race จุดที่ 3 แล้ว!")
+        end
+    end
+})
+
+-- ============ CLEANUP ============
+Window:OnClose(function()
+    if eatConnection then
+        eatConnection:Disconnect()
+        eatConnection = nil
+    end
+    if raceConnection1 then
+        raceConnection1:Disconnect()
+        raceConnection1 = nil
+    end
+    if raceConnection2 then
+        raceConnection2:Disconnect()
+        raceConnection2 = nil
+    end
+    if raceConnection3 then
+        raceConnection3:Disconnect()
+        raceConnection3 = nil
+    end
+    raceRunning1 = false
+    raceRunning2 = false
+    raceRunning3 = false
+    Running1 = false
+    Running2 = false
+    Running3 = false
+    isAutoRace1 = false
+    isAutoRace2 = false
+    isAutoRace3 = false
+end)
+
+print("✅ Loaded: Auto Move2 + Auto Move1 + Auto Move3 + Auto Eat + Auto Race 3 จุด")
+print("📍 Auto Move2: Point1(สูง) -> Point2(กลาง) -> Point3(ล่าง)")
+print("📍 Auto Move1: Point4 -> Point5 -> Point6")
+print("📍 Auto Move3: Point7(สูง) -> Point8(กลาง) -> Point9(ล่าง)")
+print("🏁 Auto Race: 3 จุด วาปเด้งๆ + จบ Race รัวๆ")

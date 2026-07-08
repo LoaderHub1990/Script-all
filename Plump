@@ -168,13 +168,19 @@ end)
 
 -- ============ WIND UI ============
 local Window = WindUI:CreateWindow({
-    Title = "[UPD] Plump enough to break the tape 🍗.",
-    Icon = "user", -- ใส่ Asset ID ของคุณ
-    Author = "LoaderHub",
-    Folder = "LoaderHub",
-    Size = UDim2.fromOffset(500, 400),
+    Title = "[UPD] Plump enough",
+    Icon = "https://media.discordapp.net/attachments/1433395834824687738/1524203852612636783/2fd782e6b39972782e96c1e6634eb7c8.jpg",
+    Author = "By Luader & นู๋จิไข่มุก 500cc",
+    Size = UDim2.fromOffset(580, 400),
     Transparent = true,
-    Theme = "Dark",
+    Theme = "Violet",
+    SideBarWidth = 200
+})
+-- ============ TAG ============
+Window:Tag({
+    Title = "BATE 1.0",
+    Icon  = "rocket",
+    Color = Color3.fromRGB(200, 50, 255)
 })
 
 -- ============ MAIN TAB ============

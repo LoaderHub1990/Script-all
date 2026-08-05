@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Username = Player.Name
 
@@ -24,7 +25,6 @@ local function gradient(text, startColor, endColor)
     return result
 end
 
--- ===== ขนาด UI เล็กลง กำลังพอดี =====
 local Window = WindUI:CreateWindow({
     Title = gradient("Luader Hub", Color3.fromHex("#6A11CB"), Color3.fromHex("#2575FC")),
     Icon = "https://img1.pic.in.th/images/d3fa6770d771bdf36f64990e84f87535-removebg-preview.png",
@@ -67,41 +67,7 @@ Window:Tag({
     Color = Color3.fromRGB(255, 20, 147),
 })
 
-local OtherTab = Window:Tab({ 
-    Title = "Menu", 
-    Icon = "play" 
-})
-
-local ESPTab = Window:Tab({ 
-    Title = "ESP Payer", 
-    Icon = "eye" 
-})
-
-local MovementTab = Window:Tab({ 
-    Title = "Speed", 
-    Icon = "footprints" 
-})
-
-local TeleportTab = Window:Tab({ 
-    Title = "Teleport", 
-    Icon = "map-pin" 
-})
-
-
-
-local ConfigTab = Window:Tab({ 
-    Title = "Settings", 
-    Icon = "settings" 
-})
-
-ConfigTab:Section({
-    Title = "การตั้งค่าทั่วไป",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
--- ===== ตัวแปรตั้งค่า =====
+-- ====== Settings (ต้องประกาศก่อนใช้งาน) ======
 local Settings = {
     NotifyOnClick = true,
     AutoClose = false,
@@ -129,122 +95,195 @@ local Settings = {
     FlingPower = 10000
 }
 
-local notifyToggle = ConfigTab:Toggle({
-    Title = "แจ้งเตือนเมื่อกดปุ่ม",
-    Desc = "โชว์ Notify ทุกครั้งที่กดปุ่มไอเทม",
-    Flag = "notifyOnClick",
-    Value = Settings.NotifyOnClick,
-    Callback = function(state) Settings.NotifyOnClick = state end
-})
-
-local autoCloseToggle = ConfigTab:Toggle({
-    Title = "ปิดหน้าต่างอัตโนมัติหลังกด",
-    Flag = "autoClose",
-    Value = Settings.AutoClose,
-    Callback = function(state) Settings.AutoClose = state end
-})
-
-local antiAfkToggle = ConfigTab:Toggle({
-    Title = "กันเตะ AFK (Anti-AFK)",
-    Flag = "antiAfk",
-    Value = Settings.AntiAFK,
-    Callback = function(state) Settings.AntiAFK = state end
-})
-
-Players.LocalPlayer.Idled:Connect(function()
-    if Settings.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+-- ====== ฟังก์ชันรีโหลดกระสุนทั้งหมด ======
+local function reloadAllGuns()
+    print("เริ่มรีโหลดปืนทั้งหมด...")
+    
+    local char = Player.Character
+    if not char then
+        print("ไม่พบตัวละคร")
+        return false
     end
-end)
-
-ConfigTab:Divider()
-
--- ===== เข้า/ออกเซิร์ฟเวอร์ =====
-ConfigTab:Section({
-    Title = "จัดการเซิร์ฟเวอร์",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
-ConfigTab:Button({
-    Title = "รีจอยเซิร์ฟเวอร์เดิม",
-    Icon = "refresh-cw",
-    Color = Color3.fromHex("315dff"),
-    Callback = function()
-        local ok = pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
-        end)
-        if not ok then
-            TeleportService:Teleport(game.PlaceId, Player)
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum then
+        print("ไม่พบ Humanoid")
+        return false
+    end
+    
+    -- เก็บปืนทั้งหมดที่มีใน Backpack
+    local backpack = Player.Backpack
+    local guns = {}
+    
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name == "M4" then
+                table.insert(guns, tool)
+            end
         end
     end
-})
-
-ConfigTab:Button({
-    Title = "เปลี่ยนเซิร์ฟเวอร์ใหม่ (สุ่ม)",
-    Icon = "shuffle",
-    Color = Color3.fromHex("315dff"),
-    Callback = function()
-        TeleportService:Teleport(game.PlaceId, Player)
+    
+    -- ตรวจปืนที่ถืออยู่
+    local equippedGun = char:FindFirstChild("M4")
+    if equippedGun then
+        table.insert(guns, 1, equippedGun)
     end
-})
-
-ConfigTab:Button({
-    Title = "ออกจากเกม",
-    Icon = "log-out",
-    Color = Color3.fromHex("ff3b3b"),
-    Callback = function()
-        Window:Dialog({
-            Title = "ยืนยันออกจากเกม",
-            Content = "ต้องการออกจากเกมตอนนี้ใช่ไหม?",
-            Buttons = {
-                {
-                    Title = "ยกเลิก",
-                    Variant = "Tertiary",
-                },
-                {
-                    Title = "ออกเกม",
-                    Variant = "Primary",
-                    Callback = function()
-                        Player:Kick("ออกจากเกมโดยผู้ใช้")
+    
+    if #guns == 0 then
+        print("ไม่พบ M4 ใดๆ")
+        return false
+    end
+    
+    print("พบ M4 ทั้งหมด " .. #guns .. " กระบอก")
+    
+    -- รีโหลดทีละกระบอก
+    for i, gun in ipairs(guns) do
+        print("กำลังรีโหลดกระบอกที่ " .. i)
+        
+        -- หยิบปืนขึ้นมา
+        local currentGun = char:FindFirstChild("M4")
+        if currentGun and currentGun ~= gun then
+            currentGun.Parent = Player.Backpack
+            task.wait(0.05)
+        end
+        
+        -- หยิบปืนที่ต้องการ
+        if gun.Parent == Player.Backpack then
+            hum:EquipTool(gun)
+            task.wait(0.1)
+        end
+        
+        -- รีโหลด
+        local m4 = char:FindFirstChild("M4")
+        if m4 then
+            local reloadEvent = m4:FindFirstChild("ReloadEvent") or m4:FindFirstChild("Reload") or m4:FindFirstChild("ShootEvent")
+            if reloadEvent then
+                pcall(function()
+                    reloadEvent:FireServer()
+                    print("รีโหลดกระบอกที่ " .. i .. " สำเร็จ")
+                end)
+            else
+                -- ลอง Remote
+                pcall(function()
+                    local remote = ReplicatedStorage:FindFirstChild("ReloadEvent") or ReplicatedStorage:FindFirstChild("GunReload")
+                    if remote then
+                        remote:FireServer("M4")
+                        print("รีโหลดกระบอกที่ " .. i .. " สำเร็จ (ผ่าน Remote)")
                     end
-                }
-            }
-        })
+                end)
+            end
+        end
+        
+        -- หน่วงเวลา 0.5-1 วินาที
+        local delay = 0.7 + math.random() * 0.3
+        task.wait(delay)
+        
+        -- เอาปืนออกไปเก็บ
+        if char:FindFirstChild("M4") then
+            char.M4.Parent = Player.Backpack
+            task.wait(0.05)
+        end
     end
+    
+    -- หยิบปืนกลับมา 1 กระบอก
+    if #guns > 0 then
+        local firstGun = guns[1]
+        if firstGun and firstGun.Parent == Player.Backpack then
+            hum:EquipTool(firstGun)
+        end
+    end
+    
+    print("รีโหลดปืนทั้งหมดเสร็จสิ้น")
+    return true
+end
+
+-- ====== ฟังก์ชันรีโหลดกระสุน 7 วิ ======
+local function reloadBullets()
+    print("เริ่มรีโหลดกระสุน...")
+    
+    local char = Player.Character
+    if not char then
+        print("ไม่พบตัวละคร")
+        return false
+    end
+    
+    -- หา M4 ที่ถืออยู่
+    local m4 = char:FindFirstChild("M4")
+    if not m4 then
+        -- ถ้าไม่มี M4 ให้ค้นหาใน Backpack และหยิบขึ้นมา
+        local backpack = Player.Backpack
+        if backpack then
+            for _, tool in pairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name == "M4" then
+                    local hum = char:FindFirstChild("Humanoid")
+                    if hum then
+                        hum:EquipTool(tool)
+                        task.wait(0.2)
+                        m4 = char:FindFirstChild("M4")
+                        break
+                    end
+                end
+            end
+        end
+    end
+    
+    if not m4 then
+        print("ไม่พบ M4 ในตัวละครหรือ Backpack")
+        return false
+    end
+    
+    -- รีโหลด 7 ครั้ง
+    local reloadCount = 7
+    local reloadDelay = 0.8
+    
+    print("กำลังรีโหลด " .. reloadCount .. " ครั้ง...")
+    
+    for i = 1, reloadCount do
+        local reloadEvent = m4:FindFirstChild("ReloadEvent") or m4:FindFirstChild("Reload") or m4:FindFirstChild("ShootEvent")
+        
+        if reloadEvent then
+            pcall(function()
+                reloadEvent:FireServer()
+                print("รีโหลดครั้งที่ " .. i .. " สำเร็จ")
+            end)
+        else
+            pcall(function()
+                local remote = ReplicatedStorage:FindFirstChild("ReloadEvent") or ReplicatedStorage:FindFirstChild("GunReload")
+                if remote then
+                    remote:FireServer("M4")
+                    print("รีโหลดครั้งที่ " .. i .. " สำเร็จ (ผ่าน Remote)")
+                end
+            end)
+        end
+        
+        task.wait(reloadDelay + math.random(-5, 5) / 100)
+    end
+    
+    print("รีโหลดกระสุนครบ " .. reloadCount .. " ครั้ง")
+    return true
+end
+
+-- ====== TAB 1: Menu ======
+local MenuTab = Window:Tab({ 
+    Title = "Menu", 
+    Icon = "play" 
 })
 
-ConfigTab:Divider()
-
--- ===== ระบบ Save / Load Config =====
-ConfigTab:Section({
-    Title = "บันทึกการตั้งค่า",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
-local ConfigManager = Window.ConfigManager
-local configName = "default"
-
--- ===== แท็บ "อื่นๆ" =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "ปรับแต่งกล้อง",
     TextXAlignment = "Center",
     Opened = true,
     Box = true,
 })
 
-local fovSlider = OtherTab:Slider({
+local fovSlider = MenuTab:Slider({
     Title = "FOV (มุมมองกล้อง)",
-    Desc = "ปรับมุมมองกล้อง 70-120 ",
+    Desc = "ปรับมุมมองกล้อง 70-120",
     Flag = "fovValue",
     Value = {
         Min = 1,
         Max = 120,
-        Default = Settings.FOVValue
+        Default = 70
     },
     Callback = function(value)
         Settings.FOVValue = value
@@ -252,7 +291,7 @@ local fovSlider = OtherTab:Slider({
     end
 })
 
-OtherTab:Input({
+MenuTab:Input({
     Title = "พิมพ์ค่า FOV",
     Placeholder = "เช่น 90",
     Callback = function(text)
@@ -265,7 +304,7 @@ OtherTab:Input({
     end
 })
 
-OtherTab:Button({
+MenuTab:Button({
     Title = "รีเซ็ต FOV (70)",
     Icon = "rotate-ccw",
     Color = Color3.fromHex("315dff"),
@@ -281,17 +320,16 @@ OtherTab:Button({
     end
 })
 
-OtherTab:Divider()
+MenuTab:Divider()
 
--- ===== หมุนตัว ปรับความเร็วได้ =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "หมุนตัว",
     TextXAlignment = "Center",
     Opened = true,
     Box = true,
 })
 
-local spinToggle = OtherTab:Toggle({
+local spinToggle = MenuTab:Toggle({
     Title = "เปิดหมุนตัว",
     Desc = "หมุนตัวละครรอบตัวเอง",
     Flag = "spinEnabled",
@@ -301,7 +339,7 @@ local spinToggle = OtherTab:Toggle({
     end
 })
 
-local spinSpeedSlider = OtherTab:Slider({
+local spinSpeedSlider = MenuTab:Slider({
     Title = "ความเร็วหมุน",
     Flag = "spinSpeed",
     Value = {
@@ -314,10 +352,9 @@ local spinSpeedSlider = OtherTab:Slider({
     end
 })
 
-OtherTab:Divider()
+MenuTab:Divider()
 
--- ===== Noclip =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "Noclip",
     TextXAlignment = "Center",
     Opened = true,
@@ -345,7 +382,7 @@ local function ToggleNoclip(state)
     end
 end
 
-local noclipToggle = OtherTab:Toggle({
+local noclipToggle = MenuTab:Toggle({
     Title = "เปิด Noclip",
     Desc = "เดินทะลุกำแพง",
     Flag = "noclipEnabled",
@@ -356,17 +393,16 @@ local noclipToggle = OtherTab:Toggle({
     end
 })
 
-OtherTab:Divider()
+MenuTab:Divider()
 
--- ===== Boost FPS =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "เพิ่มประสิทธิภาพ",
     TextXAlignment = "Center",
     Opened = true,
     Box = true,
 })
 
-local boostFPSToggle = OtherTab:Toggle({
+local boostFPSToggle = MenuTab:Toggle({
     Title = "Boost FPS",
     Desc = "ปิดเอฟเฟกต์ที่ไม่จำเป็นเพื่อเพิ่ม FPS",
     Flag = "boostFPS",
@@ -417,10 +453,9 @@ local boostFPSToggle = OtherTab:Toggle({
     end
 })
 
-OtherTab:Divider()
+MenuTab:Divider()
 
--- ===== BLACK HOLE =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "BLACK HOLE",
     Desc = "ดูดหีเเบบโหดๆ",
     TextXAlignment = "Center",
@@ -556,7 +591,7 @@ local function toggleBlackHole()
     end
 end
 
-local blackHoleToggle = OtherTab:Toggle({
+local blackHoleToggle = MenuTab:Toggle({
     Title = "หลุ่มดำดูดหีโหดๆ",
     Desc = "ดูดจนน้ำหีหลุดออกมา",
     Flag = "blackHoleEnabled",
@@ -567,7 +602,7 @@ local blackHoleToggle = OtherTab:Toggle({
     end
 })
 
-local blackHolePowerSlider = OtherTab:Slider({
+local blackHolePowerSlider = MenuTab:Slider({
     Title = "แรงดูด",
     Flag = "blackHolePower",
     Value = {
@@ -580,10 +615,9 @@ local blackHolePowerSlider = OtherTab:Slider({
     end
 })
 
-OtherTab:Divider()
+MenuTab:Divider()
 
--- ===== FUCK FLING =====
-OtherTab:Section({
+MenuTab:Section({
     Title = "Fuck Fling",
     Desc = "Fling",
     TextXAlignment = "Center",
@@ -631,7 +665,7 @@ local function stopFling()
     flingTask = nil
 end
 
-local flingToggle = OtherTab:Toggle({
+local flingToggle = MenuTab:Toggle({
     Title = "เปิด Fuck Fling",
     Desc = "Fling ปิ๊วๆ",
     Flag = "flingEnabled",
@@ -646,7 +680,7 @@ local flingToggle = OtherTab:Toggle({
     end
 })
 
-local flingPowerSlider = OtherTab:Slider({
+local flingPowerSlider = MenuTab:Slider({
     Title = "Fling",
     Flag = "flingPower",
     Value = {
@@ -659,367 +693,1466 @@ local flingPowerSlider = OtherTab:Slider({
     end
 })
 
--- ===== แท็บ "การเคลื่อนที่" =====
-MovementTab:Section({
-    Title = "ความเร็ว & การกระโดด",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
+-- ====== TAB 2: Auto Aim ======
+local AutoAimTab = Window:Tab({ 
+    Title = "Auto Aim", 
+    Icon = "target" 
 })
 
-local walkSpeedSlider = MovementTab:Slider({
-    Title = "ความเร็วเดิน (WalkSpeed)",
-    Flag = "walkSpeed",
-    Value = { Min = 16, Max = 100, Default = 16 },
-    Callback = function(value)
-        local char = Player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = value
-        end
-    end
-})
+local AutoAimSettings = {
+    Enabled = false,
+    AimLock = true,
+    FireRate = 0.05,
+    LockDistance = 250,
+    TracerEnabled = true,
+    TracerColor = Color3.fromRGB(255, 0, 255),
+    GunSwitchEnabled = true,
+    MaxAmmo = 30,
+    ShootMode = "Switch",
+    LockMode = "Closest",
+    SpecificTarget = nil,
+    TargetName = "",
+    BypassWalls = false,
+    AutoStopOnDeath = true,
+}
 
-local jumpPowerSlider = MovementTab:Slider({
-    Title = "แรงกระโดด (JumpPower)",
-    Flag = "jumpPower",
-    Value = { Min = 50, Max = 200, Default = 50 },
-    Callback = function(value)
-        local char = Player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.JumpPower = value
-        end
-    end
-})
+local targetPlayer = nil
+local totalShots = 0
+local totalHits = 0
+local lastShotTime = 0
+local TracerObjects = {}
+local autoAimRunning = false
+local autoAimConnection = nil
+local currentGunIndex = 1
+local currentAmmo = 30
+local isDuplicating = false
 
-MovementTab:Divider()
+local LOOP_COUNT = 7
+local LOOP_DELAY = 0.001
+local GUN_NAME = "M4"
 
-local infJumpToggle = MovementTab:Toggle({
-    Title = "กระโดดไม่จำกัด (Infinite Jump)",
-    Flag = "infiniteJump",
-    Value = Settings.InfiniteJump,
-    Callback = function(state) Settings.InfiniteJump = state end
-})
+local Event = Instance.new("BindableEvent")
+Event.Name = "ShootEvent"
+Event.Parent = Player
 
-UserInputService.JumpRequest:Connect(function()
-    if Settings.InfiniteJump then
-        local char = Player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
+Event.Event:Connect(function()
+    print("Local Event Fired! (M4 Shooting Event)")
 end)
 
-MovementTab:Divider()
+-- ====== ฟังก์ชันรีโหลดอัตโนมัติทุก 7 วินาที ======
+local autoReloadEnabled = false
+local autoReloadConnection = nil
 
--- ===== ระบบบิน (จาก PremiumSitFly ตัด GUI ออก) =====
-MovementTab:Section({
-    Title = "ระบบบิน",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
--- ตัวแปรจากระบบบิน
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local HRP = Character:WaitForChild("HumanoidRootPart")
-
-local IsFlying = false
-local bv = Instance.new("BodyVelocity")
-local bg = Instance.new("BodyGyro")
-
--- ฟังก์ชันเปิด/ปิดบิน
-local function toggleFly(state)
-    Settings.FlyEnabled = state
-    if state then
-        if Humanoid then
-            Humanoid.Sit = true
+local function startAutoReload()
+    if autoReloadConnection then
+        autoReloadConnection:Disconnect()
+        autoReloadConnection = nil
+    end
+    
+    autoReloadEnabled = true
+    autoReloadConnection = RunService.Heartbeat:Connect(function()
+        if not autoReloadEnabled then return end
+        
+        local currentTime = tick()
+        if currentTime % 7 < 0.1 then
+            task.spawn(function()
+                print("Auto Reload triggered!")
+                reloadAllGuns()
+            end)
         end
-    else
-        IsFlying = false
-        bv.Parent = nil
-        bg.Parent = nil
-        if Humanoid then
-            Humanoid.Sit = false
-        end
+    end)
+    
+    print("Auto Reload started (every 7 seconds)")
+end
+
+local function stopAutoReload()
+    autoReloadEnabled = false
+    if autoReloadConnection then
+        autoReloadConnection:Disconnect()
+        autoReloadConnection = nil
+    end
+    print("Auto Reload stopped")
+end
+
+-- ====== ฟังก์ชันรีโหลดด้วยปุ่ม ======
+local function reloadGuns()
+    print("Reloading guns...")
+    return reloadAllGuns()
+end
+
+local function runExternalScript()
+    print("Loading external M4 script...")
+    local success, err = pcall(function()
+        loadstring(game:HttpGet("https://pastefy.app/N01QhUuY/raw"))()
+    end)
+    if not success then
+        warn("Failed to load external script:", err)
     end
 end
 
-local flyToggle = MovementTab:Toggle({
-    Title = "เปิดโหมดบิน",
-    Desc = "นั่งแล้วขยับ WASD เพื่อบิน (Space ขึ้น)",
-    Flag = "flyEnabled",
-    Value = Settings.FlyEnabled,
-    Callback = function(state)
-        toggleFly(state)
-    end
-})
-
-local flySpeedSlider = MovementTab:Slider({
-    Title = "ความเร็วบิน",
-    Flag = "flySpeed",
-    Value = {
-        Min = 10,
-        Max = 200,
-        Default = Settings.FlySpeed
-    },
-    Callback = function(value)
-        Settings.FlySpeed = value
-    end
-})
-
-MovementTab:Input({
-    Title = "พิมพ์ความเร็วบิน",
-    Placeholder = "เช่น 75",
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            Settings.FlySpeed = math.clamp(num, 10, 200)
-            flySpeedSlider:Set(Settings.FlySpeed)
+local function waitForM4Equipped()
+    print("Waiting for M4 to be equipped...")
+    local attempts = 0
+    repeat
+        task.wait(0.1)
+        attempts = attempts + 1
+        if attempts > 50 then
+            warn("M4 equip timeout")
+            return false
         end
+    until Player.Character:FindFirstChild("M4")
+    print("M4 equipped!")
+    return true
+end
+
+local function unequipM4()
+    print("Unequipping M4...")
+    local m4 = Player.Character:FindFirstChild("M4")
+    if m4 then
+        m4.Parent = Player.Backpack
+        task.wait(0.1)
+        print("M4 unequipped!")
+        return true
+    else
+        print("M4 not found in Character")
+        return false
     end
-})
+end
 
-MovementTab:Divider()
+local function saveM4()
+    print("Saving M4 to storage...")
+    local success, err = pcall(function()
+        local toolStorage = ReplicatedStorage:FindFirstChild("ToolStorage")
+        if toolStorage then
+            local toolsStorage = toolStorage:FindFirstChild("ToolsStorage")
+            if toolsStorage then
+                toolsStorage:FireServer("Save", "M4")
+                print("M4 saved!")
+                return true
+            end
+        end
+        return false
+    end)
+    if not success then
+        warn("Failed to save M4:", err)
+    end
+    return success
+end
 
--- ระบบบินหลัก (RenderStepped)
-RunService.RenderStepped:Connect(function()
-    if not Settings.FlyEnabled then return end
+local function retrieveM4()
+    print("Retrieving M4 from storage...")
+    local success, err = pcall(function()
+        local toolStorage = ReplicatedStorage:FindFirstChild("ToolStorage")
+        if toolStorage then
+            local toolsStorage = toolStorage:FindFirstChild("ToolsStorage")
+            if toolsStorage then
+                toolsStorage:FireServer("Get", "M4")
+                print("M4 retrieved!")
+                return true
+            end
+        end
+        return false
+    end)
+    if not success then
+        warn("Failed to retrieve M4:", err)
+    end
+    return success
+end
+
+local function startDuplication()
+    if isDuplicating then return end
+    isDuplicating = true
     
-    local char = Player.Character
-    if not char then return end
+    print("Starting M4 Duplication Loop...")
     
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
+    retrieveM4()
+    task.wait(1)
     
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local cam = workspace.CurrentCamera
-    if not cam then return end
-    
-    -- เช็คว่านั่งอยู่หรือไม่
-    if hum.Sit then
-        local moveDir = hum.MoveDirection
-        if moveDir.Magnitude > 0 then 
-            IsFlying = true 
+    for i = 1, LOOP_COUNT do
+        print(string.format("Loop %d/%d", i, LOOP_COUNT))
+        
+        runExternalScript()
+        
+        if waitForM4Equipped() then
+            Event:Fire()
+            print("Local Event Fired for M4!")
+            
+            task.wait(0.2)
+            unequipM4()
+            
+            task.wait(0.2)
+            saveM4()
+        else
+            warn("Skipping loop due to equip failure")
         end
         
-        if IsFlying then
-            -- หยุด Animation นั่ง
-            for _, track in pairs(hum:GetPlayingAnimationTracks()) do
-                if track.Name:lower():find("sit") or track.Animation.AnimationId:lower():find("sit") then
-                    track:Stop(0.1)
-                end
-            end
-            
-            bv.Parent = hrp
-            bg.Parent = hrp
-            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            bg.CFrame = cam.CFrame
-            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            
-            local velocity = Vector3.zero
-            if moveDir.Magnitude > 0 then
-                local camLook = cam.CFrame.LookVector
-                local camRight = cam.CFrame.RightVector
-                velocity = (camLook * moveDir:Dot(camLook) + camRight * moveDir:Dot(camRight)).Unit * Settings.FlySpeed
-            end
-            
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump then 
-                velocity = velocity + Vector3.new(0, Settings.FlySpeed, 0) 
-            end
-            
-            bv.Velocity = velocity
-        end
-    else
-        IsFlying = false
-        bv.Parent = nil
-        bg.Parent = nil
+        task.wait(LOOP_DELAY)
     end
-end)
-
--- อัพเดต Character เมื่อเกิดใหม่
-Player.CharacterAdded:Connect(function(newChar)
-    wait(0.5)
-    Character = newChar
-    Humanoid = Character:WaitForChild("Humanoid")
-    HRP = Character:WaitForChild("HumanoidRootPart")
     
-    if Settings.FlyEnabled then
-        toggleFly(false)
-        flyToggle:Set(false)
-        Settings.FlyEnabled = false
+    print("M4 Duplication complete! Now retrieving all M4s...")
+    
+    for i = 1, LOOP_COUNT do
+        print(string.format("Retrieving M4 %d/%d", i, LOOP_COUNT))
+        retrieveM4()
+        task.wait(0.05)
     end
-end)
-
-MovementTab:Divider()
-
--- ===== TP Walk =====
-MovementTab:Section({
-    Title = "TP Walk",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
-local currentVelocity = Vector3.zero
-
-RunService.RenderStepped:Connect(function(dt)
-    if not Settings.TPWalkEnabled then
-        currentVelocity = Vector3.zero
-        return
-    end
-
-    local char = Player.Character
-    if not char then return end
-
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-
-    local moveDir = hum.MoveDirection
-
-    if moveDir.Magnitude > 0 then
-        local targetVelocity = moveDir.Unit * Settings.TPWalkSpeed
-        currentVelocity = currentVelocity:Lerp(targetVelocity, 0.15)
-        hrp.CFrame = hrp.CFrame + (currentVelocity * dt * 60)
-    else
-        currentVelocity = currentVelocity:Lerp(Vector3.zero, 0.2)
-    end
-end)
-
-local tpWalkToggle = MovementTab:Toggle({
-    Title = "เปิด TP Walk",
-    Flag = "tpWalk",
-    Value = Settings.TPWalkEnabled,
-    Callback = function(state)
-        Settings.TPWalkEnabled = state
-    end
-})
-
-local tpWalkSlider = MovementTab:Slider({
-    Title = "ความเร็ว TP Walk",
-    Flag = "tpWalkSpeed",
-    Value = {
-        Min = 1,
-        Max = 30,
-        Default = Settings.TPWalkSpeed
-    },
-    Callback = function(value)
-        Settings.TPWalkSpeed = value
-    end
-})
-
-MovementTab:Input({
-    Title = "พิมพ์ความเร็ว TP Walk",
-    Placeholder = "เช่น 10",
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            Settings.TPWalkSpeed = math.clamp(num, 1, 30)
-            tpWalkSlider:Set(Settings.TPWalkSpeed)
-        end
-    end
-})
-
--- ระบบหมุนตัว
-RunService.RenderStepped:Connect(function()
-    if Settings.SpinEnabled then
-        local char = Player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed), 0)
-            end
-        end
-    end
-end)
-
-TeleportTab:Section({
-    Title = "ระบบเทเลพอร์ต",
-    TextXAlignment = "Center",
-    Opened = true,
-    Box = true,
-})
-
-local SelectedPlayer
-
-local function GetPlayerList()
-    local list = {}
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= Player then
-            table.insert(list, plr.Name)
-        end
-    end
-
-    table.sort(list)
-    return list
+    
+    print("Duplication complete!")
+    isDuplicating = false
 end
 
-local PlayerDropdown = TeleportTab:Dropdown({
-    Title = "เลือกผู้เล่น",
-    Values = GetPlayerList(),
-    Callback = function(value)
-        SelectedPlayer = Players:FindFirstChild(value)
+local function getAllM4s()
+    local guns = {}
+    local backpack = Player.Backpack
+    if not backpack then return guns end
+    
+    for _, tool in pairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name == "M4" then
+            table.insert(guns, tool)
+        end
     end
+    return guns
+end
+
+local function switchM4()
+    local guns = getAllM4s()
+    
+    if #guns == 0 then
+        return false
+    end
+    
+    local character = Player.Character
+    if character then
+        local equippedGun = character:FindFirstChild("M4")
+        if equippedGun then
+            equippedGun.Parent = Player.Backpack
+        end
+    end
+    
+    if currentGunIndex > #guns then
+        currentGunIndex = 1
+    end
+    
+    local selectedGun = guns[currentGunIndex]
+    
+    if selectedGun and character and character:FindFirstChild("Humanoid") then
+        character.Humanoid:EquipTool(selectedGun)
+        currentGunIndex = currentGunIndex + 1
+        currentAmmo = AutoAimSettings.MaxAmmo
+        
+        task.spawn(function()
+            wait(0.05)
+            if character:FindFirstChild("M4") then
+                local gun = character.M4
+                for _, part in pairs(gun:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        part.Transparency = 1
+                    elseif part:IsA("Decal") or part:IsA("Texture") then
+                        part.Transparency = 1
+                    end
+                end
+            end
+        end)
+        
+        return true
+    end
+    
+    return false
+end
+
+local function shootAllGuns()
+    local guns = getAllM4s()
+    if #guns == 0 then
+        return false
+    end
+    
+    local character = Player.Character
+    if not character or not character:FindFirstChild("Humanoid") then
+        return false
+    end
+    
+    local successCount = 0
+    local targetPos = nil
+    
+    if targetPlayer then
+        local targetChar = targetPlayer.Character
+        if targetChar then
+            local targetPart = targetChar:FindFirstChild("HumanoidRootPart")
+            if targetPart then
+                targetPos = targetPart.Position
+            end
+        end
+    end
+    
+    if not targetPos then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            targetPos = rootPart.Position + rootPart.CFrame.LookVector * 100
+        else
+            return false
+        end
+    end
+    
+    for _, gun in ipairs(guns) do
+        gun.Parent = character
+        
+        local shootEvent = gun:FindFirstChild("ShootEvent")
+        if shootEvent then
+            task.spawn(function()
+                pcall(function()
+                    shootEvent:FireServer(targetPos)
+                    totalShots = totalShots + 1
+                    if targetPlayer then
+                        totalHits = totalHits + 1
+                    end
+                end)
+            end)
+            successCount = successCount + 1
+        end
+        
+        task.wait(0.01)
+        gun.Parent = Player.Backpack
+    end
+    
+    if successCount > 0 and #guns > 0 then
+        local firstGun = guns[1]
+        if firstGun then
+            firstGun.Parent = character
+            task.wait(0.02)
+            task.spawn(function()
+                if character:FindFirstChild("M4") then
+                    local gun = character.M4
+                    for _, part in pairs(gun:GetDescendants()) do
+                        if part:IsA("BasePart") or part:IsA("MeshPart") then
+                            part.Transparency = 1
+                        elseif part:IsA("Decal") or part:IsA("Texture") then
+                            part.Transparency = 1
+                        end
+                    end
+                end
+            end)
+        end
+    end
+    
+    return successCount > 0
+end
+
+local function equipM4()
+    local guns = getAllM4s()
+    
+    if #guns == 0 then
+        return false
+    end
+    
+    local character = Player.Character
+    if character then
+        local equippedGun = character:FindFirstChild("M4")
+        if equippedGun then
+            equippedGun.Parent = Player.Backpack
+        end
+    end
+    
+    local firstGun = guns[1]
+    if firstGun and character and character:FindFirstChild("Humanoid") then
+        character.Humanoid:EquipTool(firstGun)
+        currentGunIndex = 2
+        currentAmmo = AutoAimSettings.MaxAmmo
+        
+        task.spawn(function()
+            wait(0.05)
+            if character:FindFirstChild("M4") then
+                local gun = character.M4
+                for _, part in pairs(gun:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        part.Transparency = 1
+                    elseif part:IsA("Decal") or part:IsA("Texture") then
+                        part.Transparency = 1
+                    end
+                end
+            end
+        end)
+        
+        return true
+    end
+    
+    return false
+end
+
+local function getShootEvent()
+    local character = Player.Character
+    if not character then return nil end
+    
+    local m4 = character:FindFirstChild("M4")
+    if not m4 then return nil end
+    
+    return m4:FindFirstChild("ShootEvent")
+end
+
+local function findTarget()
+    local character = Player.Character
+    if not character then return nil end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local myPos = rootPart.Position
+    
+    if AutoAimSettings.LockMode == "Specific" and AutoAimSettings.SpecificTarget then
+        local targetChar = AutoAimSettings.SpecificTarget.Character
+        if targetChar then
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            local targetHum = targetChar:FindFirstChild("Humanoid")
+            
+            if targetRoot and targetHum and targetHum.Health > 0 then
+                local distance = (myPos - targetRoot.Position).Magnitude
+                if distance <= AutoAimSettings.LockDistance then
+                    if not AutoAimSettings.BypassWalls then
+                        local rayOrigin = rootPart.Position
+                        local rayDirection = (targetRoot.Position - rayOrigin).Unit * distance
+                        local raycastParams = RaycastParams.new()
+                        raycastParams.FilterDescendantsInstances = {character, targetChar}
+                        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                        raycastParams.IgnoreWater = true
+                        local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+                        if rayResult and not rayResult.Instance:IsDescendantOf(targetChar) then
+                            return nil
+                        end
+                    end
+                    return AutoAimSettings.SpecificTarget
+                end
+            end
+        end
+        return nil
+    end
+    
+    if AutoAimSettings.LockMode == "ByName" and AutoAimSettings.TargetName ~= "" then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Player and string.lower(player.Name):find(string.lower(AutoAimSettings.TargetName)) then
+                local targetChar = player.Character
+                if targetChar then
+                    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                    local targetHum = targetChar:FindFirstChild("Humanoid")
+                    
+                    if targetRoot and targetHum and targetHum.Health > 0 then
+                        local distance = (myPos - targetRoot.Position).Magnitude
+                        if distance <= AutoAimSettings.LockDistance then
+                            if not AutoAimSettings.BypassWalls then
+                                local rayOrigin = rootPart.Position
+                                local rayDirection = (targetRoot.Position - rayOrigin).Unit * distance
+                                local raycastParams = RaycastParams.new()
+                                raycastParams.FilterDescendantsInstances = {character, targetChar}
+                                raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                                raycastParams.IgnoreWater = true
+                                local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+                                if rayResult and not rayResult.Instance:IsDescendantOf(targetChar) then
+                                    return nil
+                                end
+                            end
+                            return player
+                        end
+                    end
+                end
+            end
+        end
+        return nil
+    end
+    
+    if AutoAimSettings.LockMode == "Closest" then
+        local closestPlayer = nil
+        local shortestDistance = AutoAimSettings.LockDistance
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Player then
+                local targetChar = player.Character
+                if targetChar then
+                    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                    local targetHum = targetChar:FindFirstChild("Humanoid")
+                    
+                    if targetRoot and targetHum and targetHum.Health > 0 then
+                        local distance = (myPos - targetRoot.Position).Magnitude
+                        
+                        if distance < shortestDistance then
+                            if not AutoAimSettings.BypassWalls then
+                                local rayOrigin = rootPart.Position
+                                local rayDirection = (targetRoot.Position - rayOrigin).Unit * distance
+                                local raycastParams = RaycastParams.new()
+                                raycastParams.FilterDescendantsInstances = {character, targetChar}
+                                raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                                raycastParams.IgnoreWater = true
+                                local rayResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+                                if rayResult and not rayResult.Instance:IsDescendantOf(targetChar) then
+                                    return closestPlayer
+                                end
+                            end
+                            shortestDistance = distance
+                            closestPlayer = player
+                        end
+                    end
+                end
+            end
+        end
+        
+        return closestPlayer
+    end
+    
+    return nil
+end
+
+local function createTracer(player)
+    if not player or player == Player then return end
+    
+    if TracerObjects[player] then
+        TracerObjects[player]:Remove()
+        TracerObjects[player] = nil
+    end
+    
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false
+    tracer.Color = AutoAimSettings.TracerColor
+    tracer.Thickness = 2
+    tracer.Transparency = 0.8
+    tracer.ZIndex = 10
+    
+    TracerObjects[player] = tracer
+    return tracer
+end
+
+local function updateTracers()
+    local myChar = Player.Character
+    if not myChar then return end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local myPos = myRoot.Position
+    local myScreenPos, onScreen = Camera:WorldToViewportPoint(myPos)
+    
+    for player, tracer in pairs(TracerObjects) do
+        tracer.Visible = false
+        
+        if AutoAimSettings.TracerEnabled and AutoAimSettings.Enabled then
+            local char = player.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChild("Humanoid")
+                
+                if root and hum and hum.Health > 0 then
+                    local targetPos, targetOnScreen = Camera:WorldToViewportPoint(root.Position)
+                    
+                    if targetOnScreen then
+                        tracer.Visible = true
+                        tracer.From = Vector2.new(myScreenPos.X, myScreenPos.Y)
+                        tracer.To = Vector2.new(targetPos.X, targetPos.Y)
+                        tracer.Color = AutoAimSettings.TracerColor
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function createTracersForAll()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player then
+            createTracer(player)
+        end
+    end
+end
+
+local function shoot(targetPos)
+    local shootEvent = getShootEvent()
+    
+    if not shootEvent then
+        if equipM4() then
+            wait(0.05)
+            shootEvent = getShootEvent()
+        end
+        
+        if not shootEvent then
+            return false
+        end
+    end
+    
+    local success, err = pcall(function()
+        shootEvent:FireServer(targetPos)
+    end)
+    
+    if success then
+        totalShots = totalShots + 1
+        currentAmmo = currentAmmo - 1
+        
+        if AutoAimSettings.GunSwitchEnabled and AutoAimSettings.ShootMode == "Switch" then
+            local guns = getAllM4s()
+            if #guns > 1 then
+                task.spawn(function()
+                    wait(0.001)
+                    switchM4()
+                    currentAmmo = AutoAimSettings.MaxAmmo
+                end)
+            end
+        end
+        
+        if currentAmmo <= 0 then
+            currentAmmo = AutoAimSettings.MaxAmmo
+        end
+        
+        return true
+    else
+        print("Shoot error:", err)
+    end
+    
+    return false
+end
+
+local function startAutoAim()
+    if autoAimRunning then return end
+    autoAimRunning = true
+    
+    createTracersForAll()
+    equipM4()
+    
+    autoAimConnection = RunService.Heartbeat:Connect(function()
+        if not AutoAimSettings.Enabled then return end
+        
+        local currentTime = tick()
+        if currentTime - lastShotTime < AutoAimSettings.FireRate then
+            return
+        end
+        
+        local newTarget = nil
+        if AutoAimSettings.LockMode == "Specific" and AutoAimSettings.SpecificTarget then
+            local targetChar = AutoAimSettings.SpecificTarget.Character
+            if targetChar then
+                local targetHum = targetChar:FindFirstChild("Humanoid")
+                if targetHum and targetHum.Health > 0 then
+                    newTarget = AutoAimSettings.SpecificTarget
+                elseif AutoAimSettings.AutoStopOnDeath then
+                    targetPlayer = nil
+                    return
+                end
+            else
+                if AutoAimSettings.AutoStopOnDeath then
+                    targetPlayer = nil
+                    return
+                end
+            end
+        end
+        
+        if not newTarget then
+            newTarget = findTarget()
+        end
+        
+        if AutoAimSettings.AimLock then
+            targetPlayer = newTarget
+        end
+        
+        local targetPos = nil
+        
+        if targetPlayer then
+            local targetChar = targetPlayer.Character
+            if targetChar then
+                local targetPart = targetChar:FindFirstChild("HumanoidRootPart")
+                if targetPart then
+                    targetPos = targetPart.Position
+                end
+            end
+        end
+        
+        if not targetPos then
+            local character = Player.Character
+            if character then
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    targetPos = rootPart.Position + rootPart.CFrame.LookVector * 100
+                end
+            end
+        end
+        
+        if targetPos then
+            local success = false
+            
+            if AutoAimSettings.ShootMode == "All" then
+                local guns = getAllM4s()
+                if #guns > 0 then
+                    success = shootAllGuns()
+                else
+                    success = shoot(targetPos)
+                end
+            else
+                success = shoot(targetPos)
+            end
+            
+            if success then
+                lastShotTime = currentTime
+            end
+        end
+    end)
+end
+
+local function stopAutoAim()
+    if autoAimConnection then
+        autoAimConnection:Disconnect()
+        autoAimConnection = nil
+    end
+    autoAimRunning = false
+    targetPlayer = nil
+end
+
+local function setSpecificTarget(playerName)
+    local player = Players:FindFirstChild(playerName)
+    if player then
+        AutoAimSettings.SpecificTarget = player
+        AutoAimSettings.LockMode = "Specific"
+        targetPlayer = player
+        return true
+    end
+    return false
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.G then
+        if AutoAimSettings.Enabled then
+            AutoAimSettings.Enabled = false
+            autoAimToggle:Set(false)
+            stopAutoAim()
+            WindUI:Notify({
+                Title = "🛑 หยุด Auto Aim",
+                Content = "กดปุ่ม G เพื่อหยุดระบบ",
+                Duration = 2
+            })
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode.R then
+        task.spawn(function()
+            WindUI:Notify({
+                Title = "🔄 กำลังรีโหลด",
+                Content = "กำลังรีโหลด M4...",
+                Duration = 2
+            })
+            reloadGuns()
+            WindUI:Notify({
+                Title = "✅ รีโหลดเสร็จ",
+                Content = "รีโหลด M4 เรียบร้อย",
+                Duration = 2
+            })
+        end)
+    end
+end)
+
+AutoAimTab:Section({
+    Title = "🎯 ระบบยิงอัตโนมัติ + ล็อกเป้า",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
 })
 
-Players.PlayerAdded:Connect(function()
-    PlayerDropdown:Refresh(GetPlayerList())
-end)
-
-Players.PlayerRemoving:Connect(function()
-    PlayerDropdown:Refresh(GetPlayerList())
-end)
-
-TeleportTab:Button({
-    Title = "วาร์ปไปหาผู้เล่น",
-    Callback = function()
-        if Player.Character
-            and Player.Character:FindFirstChild("HumanoidRootPart")
-            and SelectedPlayer
-            and SelectedPlayer.Character
-            and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
-
-            Player.Character.HumanoidRootPart.CFrame =
-                SelectedPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,-3)
-
-        else
+local autoAimToggle = AutoAimTab:Toggle({
+    Title = "เปิดระบบ Auto Aim",
+    Desc = "ยิงอัตโนมัติ + ล็อกเป้าหมาย",
+    Value = AutoAimSettings.Enabled,
+    Callback = function(state)
+        AutoAimSettings.Enabled = state
+        if state then
+            startAutoAim()
             WindUI:Notify({
-                Title = "แจ้งเตือน",
-                Content = "กรุณาเลือกผู้เล่นก่อน",
+                Title = "🎯 Auto Aim ON",
+                Content = "โหมดล็อก: " .. AutoAimSettings.LockMode,
+                Duration = 2
+            })
+        else
+            stopAutoAim()
+            WindUI:Notify({
+                Title = "🛑 Auto Aim OFF",
+                Content = "ระบบหยุดทำงาน",
                 Duration = 2
             })
         end
     end
 })
 
-TeleportTab:Button({
-    Title = "มองผู้เล่น",
-    Callback = function()
-        if SelectedPlayer
-            and SelectedPlayer.Character
-            and SelectedPlayer.Character:FindFirstChildOfClass("Humanoid") then
+AutoAimTab:Divider()
 
-            Camera.CameraSubject =
-                SelectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+AutoAimTab:Section({
+    Title = "🔄 ระบบรีโหลดกระสุน",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+AutoAimTab:Button({
+    Title = "🔄 รีโหลด M4 ทั้งหมด",
+    Icon = "refresh-cw",
+    Color = Color3.fromRGB(100, 200, 255),
+    Callback = function()
+        task.spawn(function()
+            WindUI:Notify({
+                Title = "🔄 กำลังรีโหลด",
+                Content = "กำลังรีโหลด M4 ทั้งหมด...",
+                Duration = 2
+            })
+            local success = reloadGuns()
+            if success then
+                WindUI:Notify({
+                    Title = "✅ รีโหลดสำเร็จ",
+                    Content = "รีโหลด M4 เรียบร้อยแล้ว",
+                    Duration = 2
+                })
+            else
+                WindUI:Notify({
+                    Title = "❌ รีโหลดล้มเหลว",
+                    Content = "ไม่พบ M4 หรือเกิดข้อผิดพลาด",
+                    Duration = 2
+                })
+            end
+        end)
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Button({
+    Title = "🔄 รีโหลด 7 ครั้ง (0.5-1 วินาที/ครั้ง)",
+    Icon = "clock",
+    Color = Color3.fromRGB(255, 200, 100),
+    Callback = function()
+        task.spawn(function()
+            WindUI:Notify({
+                Title = "🔄 เริ่มรีโหลด 7 ครั้ง",
+                Content = "กำลังรีโหลด... (0.5-1 วินาที/ครั้ง)",
+                Duration = 3
+            })
+            
+            local char = Player.Character
+            if not char then
+                WindUI:Notify({
+                    Title = "❌ ไม่พบตัวละคร",
+                    Content = "กรุณาเข้าสู่เกมก่อน",
+                    Duration = 2
+                })
+                return
+            end
+            
+            local m4 = char:FindFirstChild("M4")
+            if not m4 then
+                local backpack = Player.Backpack
+                if backpack then
+                    for _, tool in pairs(backpack:GetChildren()) do
+                        if tool:IsA("Tool") and tool.Name == "M4" then
+                            local hum = char:FindFirstChild("Humanoid")
+                            if hum then
+                                hum:EquipTool(tool)
+                                task.wait(0.2)
+                                m4 = char:FindFirstChild("M4")
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if not m4 then
+                WindUI:Notify({
+                    Title = "❌ ไม่พบ M4",
+                    Content = "กรุณามี M4 ในมือหรือ Backpack",
+                    Duration = 2
+                })
+                return
+            end
+            
+            local reloadCount = 7
+            local successCount = 0
+            
+            for i = 1, reloadCount do
+                local reloadEvent = m4:FindFirstChild("ReloadEvent") or m4:FindFirstChild("Reload") or m4:FindFirstChild("ShootEvent")
+                
+                if reloadEvent then
+                    local success, err = pcall(function()
+                        reloadEvent:FireServer()
+                        successCount = successCount + 1
+                    end)
+                    if not success then
+                        print("Error reloading:", err)
+                    end
+                else
+                    local success, err = pcall(function()
+                        local remote = ReplicatedStorage:FindFirstChild("ReloadEvent") or ReplicatedStorage:FindFirstChild("GunReload")
+                        if remote then
+                            remote:FireServer("M4")
+                            successCount = successCount + 1
+                        end
+                    end)
+                    if not success then
+                        print("Error reloading via remote:", err)
+                    end
+                end
+                
+                local delay = 0.7 + math.random() * 0.3
+                task.wait(delay)
+                
+                WindUI:Notify({
+                    Title = "🔄 รีโหลดครั้งที่ " .. i .. "/" .. reloadCount,
+                    Content = "หน่วงเวลา " .. string.format("%.2f", delay) .. " วินาที",
+                    Duration = 1
+                })
+            end
+            
+            WindUI:Notify({
+                Title = "✅ รีโหลดเสร็จสมบูรณ์",
+                Content = "รีโหลดสำเร็จ " .. successCount .. "/" .. reloadCount .. " ครั้ง",
+                Duration = 3
+            })
+        end)
+    end
+})
+
+AutoAimTab:Divider()
+
+local autoReloadToggle = AutoAimTab:Toggle({
+    Title = "⏱️ Auto Reload ทุก 7 วินาที",
+    Desc = "รีโหลดกระสุนอัตโนมัติทุก 7 วินาที",
+    Value = autoReloadEnabled,
+    Callback = function(state)
+        autoReloadEnabled = state
+        if state then
+            startAutoReload()
+            WindUI:Notify({
+                Title = "⏱️ Auto Reload ON",
+                Content = "รีโหลดอัตโนมัติทุก 7 วินาที",
+                Duration = 2
+            })
+        else
+            stopAutoReload()
+            WindUI:Notify({
+                Title = "⏱️ Auto Reload OFF",
+                Content = "หยุดรีโหลดอัตโนมัติ",
+                Duration = 2
+            })
         end
     end
 })
 
-TeleportTab:Button({
-    Title = "กลับมามองตัวเอง",
-    Callback = function()
-        if Player.Character then
-            Camera.CameraSubject =
-                Player.Character:FindFirstChildOfClass("Humanoid")
+AutoAimTab:Divider()
+
+AutoAimTab:Section({
+    Title = "🎯 โหมดล็อกเป้าหมาย",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local lockModeDropdown = AutoAimTab:Dropdown({
+    Title = "เลือกโหมดล็อก",
+    Desc = "เลือกวิธีการล็อกเป้าหมาย",
+    Values = {
+        "คนที่ใกล้ที่สุด (Closest)",
+        "ล็อกเฉพาะคน (Specific)",
+        "ค้นหาชื่อ (ByName)"
+    },
+    Value = "คนที่ใกล้ที่สุด (Closest)",
+    Callback = function(value)
+        if value == "คนที่ใกล้ที่สุด (Closest)" then
+            AutoAimSettings.LockMode = "Closest"
+            AutoAimSettings.SpecificTarget = nil
+        elseif value == "ล็อกเฉพาะคน (Specific)" then
+            AutoAimSettings.LockMode = "Specific"
+        elseif value == "ค้นหาชื่อ (ByName)" then
+            AutoAimSettings.LockMode = "ByName"
+            AutoAimSettings.SpecificTarget = nil
+        end
+        WindUI:Notify({
+            Title = "🎯 เปลี่ยนโหมดล็อก",
+            Content = "โหมด: " .. value,
+            Duration = 2
+        })
+    end
+})
+
+AutoAimTab:Divider()
+
+local function GetPlayerList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            table.insert(list, plr.Name)
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+local targetPlayerDropdown = AutoAimTab:Dropdown({
+    Title = "👤 เลือกเป้าหมายเฉพาะ",
+    Desc = "เลือกชื่อผู้เล่นที่ต้องการล็อก",
+    Values = GetPlayerList(),
+    Value = "ไม่มี",
+    Callback = function(value)
+        if value ~= "ไม่มี" then
+            local player = Players:FindFirstChild(value)
+            if player then
+                AutoAimSettings.SpecificTarget = player
+                AutoAimSettings.LockMode = "Specific"
+                WindUI:Notify({
+                    Title = "🎯 ล็อกเป้าหมาย",
+                    Content = "ล็อก: " .. value,
+                    Duration = 2
+                })
+            end
         end
     end
 })
 
--- ===== ESP SECTION =====
+local nameSearchInput = AutoAimTab:Input({
+    Title = "🔍 ค้นหาชื่อเป้าหมาย",
+    Placeholder = "พิมพ์ชื่อผู้เล่น...",
+    Callback = function(text)
+        if text ~= "" then
+            AutoAimSettings.TargetName = text
+            AutoAimSettings.LockMode = "ByName"
+            
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= Player and string.lower(player.Name):find(string.lower(text)) then
+                    AutoAimSettings.SpecificTarget = player
+                    targetPlayerDropdown:Set(player.Name)
+                    WindUI:Notify({
+                        Title = "🎯 พบเป้าหมาย",
+                        Content = "พบ: " .. player.Name,
+                        Duration = 2
+                    })
+                    break
+                end
+            end
+        end
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Button({
+    Title = "🔄 ล้างเป้าหมายที่เลือก",
+    Icon = "x",
+    Color = Color3.fromRGB(255, 100, 100),
+    Callback = function()
+        AutoAimSettings.SpecificTarget = nil
+        AutoAimSettings.TargetName = ""
+        AutoAimSettings.LockMode = "Closest"
+        targetPlayerDropdown:Set("ไม่มี")
+        nameSearchInput:Set("")
+        targetPlayer = nil
+        WindUI:Notify({
+            Title = "🔄 ล้างเป้าหมาย",
+            Content = "เปลี่ยนเป็นโหมดคนใกล้ที่สุด",
+            Duration = 2
+        })
+    end
+})
+
+AutoAimTab:Divider()
+
+local bypassWallsToggle = AutoAimTab:Toggle({
+    Title = "🧱 Bypass Walls (ยิงทะลุกำแพง)",
+    Desc = "ยิงทะลุสิ่งกีดขวางทุกอย่าง",
+    Value = AutoAimSettings.BypassWalls,
+    Callback = function(state)
+        AutoAimSettings.BypassWalls = state
+        WindUI:Notify({
+            Title = state and "🧱 Bypass Walls ON" or "🧱 Bypass Walls OFF",
+            Content = state and "กระสุนทะลุกำแพงได้" or "กระสุนไม่ทะลุกำแพง",
+            Duration = 2
+        })
+    end
+})
+
+local autoStopToggle = AutoAimTab:Toggle({
+    Title = "🛑 หยุดยิงเมื่อเป้าหมายตาย",
+    Desc = "หยุดยิงอัตโนมัติเมื่อเป้าหมายตาย",
+    Value = AutoAimSettings.AutoStopOnDeath,
+    Callback = function(state)
+        AutoAimSettings.AutoStopOnDeath = state
+    end
+})
+
+AutoAimTab:Divider()
+
+local shootModeDropdown = AutoAimTab:Dropdown({
+    Title = "🔫 เลือกโหมดการยิง",
+    Desc = "เลือกวิธีการยิง",
+    Values = {
+        "สลับปืน (Switch)",
+        "ยิงพร้อมกันทุกกระบอก (All)"
+    },
+    Value = "สลับปืน (Switch)",
+    Callback = function(value)
+        if value == "สลับปืน (Switch)" then
+            AutoAimSettings.ShootMode = "Switch"
+            AutoAimSettings.GunSwitchEnabled = true
+            gunSwitchToggle:Set(true)
+            WindUI:Notify({
+                Title = "🔫 โหมดสลับปืน",
+                Content = "สลับปืน M4 ทุกครั้งที่ยิง",
+                Duration = 2
+            })
+        elseif value == "ยิงพร้อมกันทุกกระบอก (All)" then
+            AutoAimSettings.ShootMode = "All"
+            AutoAimSettings.GunSwitchEnabled = false
+            gunSwitchToggle:Set(false)
+            WindUI:Notify({
+                Title = "🔫 โหมดยิงพร้อมกัน",
+                Content = "ยิงพร้อมกันทุกกระบอก M4 ที่มี",
+                Duration = 2
+            })
+        end
+    end
+})
+
+AutoAimTab:Divider()
+
+local aimLockToggle = AutoAimTab:Toggle({
+    Title = "ล็อกเป้าอัตโนมัติ",
+    Desc = "ล็อกเป้าหมายที่เลือกตลอดเวลา",
+    Value = AutoAimSettings.AimLock,
+    Callback = function(state)
+        AutoAimSettings.AimLock = state
+        if not state then
+            targetPlayer = nil
+        end
+    end
+})
+
+AutoAimTab:Divider()
+
+local gunSwitchToggle = AutoAimTab:Toggle({
+    Title = "🔄 สลับปืน M4 อัตโนมัติ",
+    Desc = "สลับปืน M4 ทุกครั้งที่ยิง (เฉพาะโหมดสลับปืน)",
+    Value = AutoAimSettings.GunSwitchEnabled,
+    Callback = function(state)
+        AutoAimSettings.GunSwitchEnabled = state
+        if AutoAimSettings.ShootMode == "All" then
+            WindUI:Notify({
+                Title = "⚠️ โหมดยิงพร้อมกัน",
+                Content = "ไม่ต้องสลับปืนในโหมดนี้",
+                Duration = 2
+            })
+        else
+            WindUI:Notify({
+                Title = "🔄 สลับปืน",
+                Content = state and "เปิดสลับปืน M4" or "ปิดสลับปืน M4",
+                Duration = 2
+            })
+        end
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Slider({
+    Title = "🔫 จำนวนกระสุนสูงสุด",
+    Desc = "จำนวนกระสุนสูงสุดของ M4 (ต่อกระบอก)",
+    Value = {
+        Min = 10,
+        Max = 100,
+        Default = AutoAimSettings.MaxAmmo
+    },
+    Callback = function(value)
+        AutoAimSettings.MaxAmmo = math.floor(value)
+        currentAmmo = AutoAimSettings.MaxAmmo
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Button({
+    Title = "🔁 Duplicate M4 × " .. LOOP_COUNT,
+    Icon = "copy",
+    Color = Color3.fromRGB(200, 100, 255),
+    Callback = function()
+        if isDuplicating then
+            WindUI:Notify({
+                Title = "⏳ กำลัง Duplicate",
+                Content = "กรุณารอสักครู่",
+                Duration = 2
+            })
+            return
+        end
+        startDuplication()
+        WindUI:Notify({
+            Title = "🔁 Duplicate M4",
+            Content = "กำลัง Duplicate M4 × " .. LOOP_COUNT,
+            Duration = 2
+        })
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Slider({
+    Title = "⚡ ความเร็วในการยิง",
+    Desc = "ยิ่งน้อยยิ่งเร็ว (0.001 - 1.0)",
+    Value = {
+        Min = 0.001,
+        Max = 1,
+        Default = AutoAimSettings.FireRate
+    },
+    Callback = function(value)
+        AutoAimSettings.FireRate = value
+    end
+})
+
+AutoAimTab:Slider({
+    Title = "📏 ระยะล็อกเป้า",
+    Desc = "ระยะในการหาเป้าหมาย",
+    Value = {
+        Min = 50,
+        Max = 500,
+        Default = AutoAimSettings.LockDistance
+    },
+    Callback = function(value)
+        AutoAimSettings.LockDistance = value
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Section({
+    Title = "👁️ เส้นโยง (Tracer Line)",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local tracerToggle = AutoAimTab:Toggle({
+    Title = "เปิด Tracer",
+    Desc = "แสดงเส้นโยงจากตัวคุณไปยังผู้เล่น",
+    Value = AutoAimSettings.TracerEnabled,
+    Callback = function(state)
+        AutoAimSettings.TracerEnabled = state
+        if not state then
+            for _, tracer in pairs(TracerObjects) do
+                tracer.Visible = false
+            end
+        end
+    end
+})
+
+AutoAimTab:Colorpicker({
+    Title = "🎨 สีเส้นโยง",
+    Desc = "เลือกสีของ Tracer Line",
+    Default = AutoAimSettings.TracerColor,
+    Callback = function(color)
+        AutoAimSettings.TracerColor = color
+        for _, tracer in pairs(TracerObjects) do
+            tracer.Color = color
+        end
+    end
+})
+
+AutoAimTab:Divider()
+
+AutoAimTab:Section({
+    Title = "📊 สถิติการยิง",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local shotLabel = AutoAimTab:Paragraph({
+    Title = "🔫 จำนวนยิง: 0",
+    Desc = "จำนวนนัดที่ยิงไปทั้งหมด",
+})
+
+local hitLabel = AutoAimTab:Paragraph({
+    Title = "🎯 จำนวนโดน: 0",
+    Desc = "จำนวนนัดที่โดนเป้าหมาย",
+})
+
+local targetLabel = AutoAimTab:Paragraph({
+    Title = "🎯 เป้าหมาย: ไม่มี",
+    Desc = "ชื่อผู้เล่นที่กำลังล็อก",
+})
+
+local gunCountLabel = AutoAimTab:Paragraph({
+    Title = "🔫 M4 ใน Backpack: 0 กระบอก",
+    Desc = "จำนวน M4 ที่พร้อมใช้",
+})
+
+local ammoLabel = AutoAimTab:Paragraph({
+    Title = "🔫 กระสุน: " .. currentAmmo .. "/" .. AutoAimSettings.MaxAmmo,
+    Desc = "จำนวนกระสุนปัจจุบัน",
+})
+
+local lockModeLabel = AutoAimTab:Paragraph({
+    Title = "🎯 โหมดล็อก: คนใกล้ที่สุด",
+    Desc = "โหมดการล็อกเป้าหมายปัจจุบัน",
+})
+
+RunService.Heartbeat:Connect(function()
+    shotLabel:Set("🔫 จำนวนยิง: " .. totalShots)
+    hitLabel:Set("🎯 จำนวนโดน: " .. totalHits)
+    
+    if targetPlayer then
+        targetLabel:Set("🎯 เป้าหมาย: " .. targetPlayer.Name .. " (ล็อกที่ตัว)")
+    else
+        targetLabel:Set("🎯 เป้าหมาย: ไม่มี")
+    end
+    
+    local guns = getAllM4s()
+    gunCountLabel:Set("🔫 M4 ใน Backpack: " .. #guns .. " กระบอก")
+    
+    ammoLabel:Set("🔫 กระสุน: " .. currentAmmo .. "/" .. AutoAimSettings.MaxAmmo)
+    
+    local modeText = ""
+    if AutoAimSettings.LockMode == "Closest" then
+        modeText = "คนใกล้ที่สุด"
+    elseif AutoAimSettings.LockMode == "Specific" and AutoAimSettings.SpecificTarget then
+        modeText = "เฉพาะ: " .. AutoAimSettings.SpecificTarget.Name
+    elseif AutoAimSettings.LockMode == "ByName" then
+        modeText = "ค้นหา: " .. AutoAimSettings.TargetName
+    end
+    lockModeLabel:Set("🎯 โหมดล็อก: " .. modeText)
+    
+    updateTracers()
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    task.wait(0.5)
+    if player ~= Player then
+        createTracer(player)
+        targetPlayerDropdown:Refresh(GetPlayerList())
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if TracerObjects[player] then
+        TracerObjects[player]:Remove()
+        TracerObjects[player] = nil
+    end
+    if AutoAimSettings.SpecificTarget == player then
+        AutoAimSettings.SpecificTarget = nil
+        targetPlayer = nil
+    end
+    targetPlayerDropdown:Refresh(GetPlayerList())
+end)
+
+-- ====== TAB 3: RGB ======
+local RGBTab = Window:Tab({ 
+    Title = "RGB Payer", 
+    Icon = "palette" 
+})
+
+RGBTab:Section({
+    Title = "🎨 RGB Color Payer",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local RGBSpeed = 0.005
+local isRGBRunning = false
+local rgbConnection = nil
+local currentHue = 0
+local TryOn = ReplicatedStorage:WaitForChild("Catalog"):WaitForChild("TryOn")
+
+local function startRGB()
+    if rgbConnection then
+        rgbConnection:Disconnect()
+        rgbConnection = nil
+    end
+    
+    isRGBRunning = true
+    currentHue = 0
+    
+    rgbConnection = RunService.RenderStepped:Connect(function()
+        if not isRGBRunning then return end
+        
+        currentHue = (currentHue + RGBSpeed) % 1
+        local color = Color3.fromHSV(currentHue, 1, 1)
+        
+        local args = { color }
+        pcall(function()
+            TryOn:InvokeServer(unpack(args))
+        end)
+    end)
+    
+    WindUI:Notify({
+        Title = "🌈 RGB Started",
+        Content = "Speed: " .. string.format("%.3f", RGBSpeed),
+        Duration = 2
+    })
+end
+
+local function stopRGB()
+    isRGBRunning = false
+    if rgbConnection then
+        rgbConnection:Disconnect()
+        rgbConnection = nil
+    end
+    
+    WindUI:Notify({
+        Title = "🛑 RGB Stopped",
+        Content = "หยุดเปลี่ยนสีแล้ว",
+        Duration = 2
+    })
+end
+
+local rgbToggle = RGBTab:Toggle({
+    Title = "🌈 เปิด/ปิด RGB",
+    Desc = "เปลี่ยนสี ตัว",
+    Value = false,
+    Callback = function(state)
+        if state then
+            startRGB()
+        else
+            stopRGB()
+        end
+    end
+})
+
+RGBTab:Divider()
+
+RGBTab:Dropdown({
+    Title = "⚡ เลือกความเร็วเปลี่ยนสี",
+    Desc = "เลือกความเร็วที่ต้องการ",
+    Values = {
+        "ช้ามาก (0.0005)",
+        "ช้า (0.001)",
+        "ปานกลาง (0.005)",
+        "เร็ว (0.02)",
+        "เร็วที่สุด (0.05)"
+    },
+    Value = "ปานกลาง (0.005)",
+    Callback = function(value)
+        if value == "ช้ามาก (0.0005)" then
+            RGBSpeed = 0.0005
+        elseif value == "ช้า (0.001)" then
+            RGBSpeed = 0.001
+        elseif value == "ปานกลาง (0.005)" then
+            RGBSpeed = 0.005
+        elseif value == "เร็ว (0.02)" then
+            RGBSpeed = 0.02
+        elseif value == "เร็วที่สุด (0.05)" then
+            RGBSpeed = 0.05
+        end
+        
+        if isRGBRunning then
+            startRGB()
+        end
+        
+        WindUI:Notify({
+            Title = "⚡ ปรับความเร็ว",
+            Content = "Speed: " .. string.format("%.4f", RGBSpeed),
+            Duration = 1
+        })
+    end
+})
+
+-- ====== TAB 4: ESP ======
+local ESPTab = Window:Tab({ 
+    Title = "ESP Payer", 
+    Icon = "eye" 
+})
+
 ESPTab:Section({
     Title = "Player ESP",
     Opened = true,
@@ -1107,10 +2240,6 @@ local espColorPicker = ESPTab:Colorpicker({
         end
     end
 })
-
---========================--
---        PLAYER ESP      --
---========================--
 
 local ESPObjects = {}
 
@@ -1309,7 +2438,472 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ===== ระบบ Save/Load Config =====
+-- ====== TAB 5: Speed ======
+local MovementTab = Window:Tab({ 
+    Title = "Speed", 
+    Icon = "footprints" 
+})
+
+MovementTab:Section({
+    Title = "ความเร็ว & การกระโดด",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local walkSpeedSlider = MovementTab:Slider({
+    Title = "ความเร็วเดิน (WalkSpeed)",
+    Flag = "walkSpeed",
+    Value = { Min = 16, Max = 100, Default = 16 },
+    Callback = function(value)
+        local char = Player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = value
+        end
+    end
+})
+
+local jumpPowerSlider = MovementTab:Slider({
+    Title = "แรงกระโดด (JumpPower)",
+    Flag = "jumpPower",
+    Value = { Min = 50, Max = 200, Default = 50 },
+    Callback = function(value)
+        local char = Player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.JumpPower = value
+        end
+    end
+})
+
+MovementTab:Divider()
+
+local infJumpToggle = MovementTab:Toggle({
+    Title = "กระโดดไม่จำกัด (Infinite Jump)",
+    Flag = "infiniteJump",
+    Value = Settings.InfiniteJump,
+    Callback = function(state) Settings.InfiniteJump = state end
+})
+
+UserInputService.JumpRequest:Connect(function()
+    if Settings.InfiniteJump then
+        local char = Player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+MovementTab:Divider()
+
+MovementTab:Section({
+    Title = "ระบบบิน",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HRP = Character:WaitForChild("HumanoidRootPart")
+
+local IsFlying = false
+local bv = Instance.new("BodyVelocity")
+local bg = Instance.new("BodyGyro")
+
+local function toggleFly(state)
+    Settings.FlyEnabled = state
+    if state then
+        if Humanoid then
+            Humanoid.Sit = true
+        end
+    else
+        IsFlying = false
+        bv.Parent = nil
+        bg.Parent = nil
+        if Humanoid then
+            Humanoid.Sit = false
+        end
+    end
+end
+
+local flyToggle = MovementTab:Toggle({
+    Title = "เปิดโหมดบิน",
+    Desc = "นั่งแล้วขยับ WASD เพื่อบิน (Space ขึ้น)",
+    Flag = "flyEnabled",
+    Value = Settings.FlyEnabled,
+    Callback = function(state)
+        toggleFly(state)
+    end
+})
+
+local flySpeedSlider = MovementTab:Slider({
+    Title = "ความเร็วบิน",
+    Flag = "flySpeed",
+    Value = {
+        Min = 10,
+        Max = 200,
+        Default = Settings.FlySpeed
+    },
+    Callback = function(value)
+        Settings.FlySpeed = value
+    end
+})
+
+MovementTab:Input({
+    Title = "พิมพ์ความเร็วบิน",
+    Placeholder = "เช่น 75",
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            Settings.FlySpeed = math.clamp(num, 10, 200)
+            flySpeedSlider:Set(Settings.FlySpeed)
+        end
+    end
+})
+
+MovementTab:Divider()
+
+RunService.RenderStepped:Connect(function()
+    if not Settings.FlyEnabled then return end
+    
+    local char = Player.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    
+    if hum.Sit then
+        local moveDir = hum.MoveDirection
+        if moveDir.Magnitude > 0 then 
+            IsFlying = true 
+        end
+        
+        if IsFlying then
+            for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+                if track.Name:lower():find("sit") or track.Animation.AnimationId:lower():find("sit") then
+                    track:Stop(0.1)
+                end
+            end
+            
+            bv.Parent = hrp
+            bg.Parent = hrp
+            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            bg.CFrame = cam.CFrame
+            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            
+            local velocity = Vector3.zero
+            if moveDir.Magnitude > 0 then
+                local camLook = cam.CFrame.LookVector
+                local camRight = cam.CFrame.RightVector
+                velocity = (camLook * moveDir:Dot(camLook) + camRight * moveDir:Dot(camRight)).Unit * Settings.FlySpeed
+            end
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump then 
+                velocity = velocity + Vector3.new(0, Settings.FlySpeed, 0) 
+            end
+            
+            bv.Velocity = velocity
+        end
+    else
+        IsFlying = false
+        bv.Parent = nil
+        bg.Parent = nil
+    end
+end)
+
+Player.CharacterAdded:Connect(function(newChar)
+    wait(0.5)
+    Character = newChar
+    Humanoid = Character:WaitForChild("Humanoid")
+    HRP = Character:WaitForChild("HumanoidRootPart")
+    
+    if Settings.FlyEnabled then
+        toggleFly(false)
+        flyToggle:Set(false)
+        Settings.FlyEnabled = false
+    end
+end)
+
+MovementTab:Divider()
+
+MovementTab:Section({
+    Title = "TP Walk",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local currentVelocity = Vector3.zero
+
+RunService.RenderStepped:Connect(function(dt)
+    if not Settings.TPWalkEnabled then
+        currentVelocity = Vector3.zero
+        return
+    end
+
+    local char = Player.Character
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+
+    local moveDir = hum.MoveDirection
+
+    if moveDir.Magnitude > 0 then
+        local targetVelocity = moveDir.Unit * Settings.TPWalkSpeed
+        currentVelocity = currentVelocity:Lerp(targetVelocity, 0.15)
+        hrp.CFrame = hrp.CFrame + (currentVelocity * dt * 60)
+    else
+        currentVelocity = currentVelocity:Lerp(Vector3.zero, 0.2)
+    end
+end)
+
+local tpWalkToggle = MovementTab:Toggle({
+    Title = "เปิด TP Walk",
+    Flag = "tpWalk",
+    Value = Settings.TPWalkEnabled,
+    Callback = function(state)
+        Settings.TPWalkEnabled = state
+    end
+})
+
+local tpWalkSlider = MovementTab:Slider({
+    Title = "ความเร็ว TP Walk",
+    Flag = "tpWalkSpeed",
+    Value = {
+        Min = 1,
+        Max = 30,
+        Default = Settings.TPWalkSpeed
+    },
+    Callback = function(value)
+        Settings.TPWalkSpeed = value
+    end
+})
+
+MovementTab:Input({
+    Title = "พิมพ์ความเร็ว TP Walk",
+    Placeholder = "เช่น 10",
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            Settings.TPWalkSpeed = math.clamp(num, 1, 30)
+            tpWalkSlider:Set(Settings.TPWalkSpeed)
+        end
+    end
+})
+
+RunService.RenderStepped:Connect(function()
+    if Settings.SpinEnabled then
+        local char = Player.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Settings.SpinSpeed), 0)
+            end
+        end
+    end
+end)
+
+-- ====== TAB 6: Teleport ======
+local TeleportTab = Window:Tab({ 
+    Title = "Teleport", 
+    Icon = "map-pin" 
+})
+
+TeleportTab:Section({
+    Title = "ระบบเทเลพอร์ต",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local SelectedPlayer
+
+local function GetPlayerList()
+    local list = {}
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            table.insert(list, plr.Name)
+        end
+    end
+
+    table.sort(list)
+    return list
+end
+
+local PlayerDropdown = TeleportTab:Dropdown({
+    Title = "เลือกผู้เล่น",
+    Values = GetPlayerList(),
+    Callback = function(value)
+        SelectedPlayer = Players:FindFirstChild(value)
+    end
+})
+
+Players.PlayerAdded:Connect(function()
+    PlayerDropdown:Refresh(GetPlayerList())
+end)
+
+Players.PlayerRemoving:Connect(function()
+    PlayerDropdown:Refresh(GetPlayerList())
+end)
+
+TeleportTab:Button({
+    Title = "วาร์ปไปหาผู้เล่น",
+    Callback = function()
+        if Player.Character
+            and Player.Character:FindFirstChild("HumanoidRootPart")
+            and SelectedPlayer
+            and SelectedPlayer.Character
+            and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+
+            Player.Character.HumanoidRootPart.CFrame =
+                SelectedPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,-3)
+
+        else
+            WindUI:Notify({
+                Title = "แจ้งเตือน",
+                Content = "กรุณาเลือกผู้เล่นก่อน",
+                Duration = 2
+            })
+        end
+    end
+})
+
+TeleportTab:Button({
+    Title = "มองผู้เล่น",
+    Callback = function()
+        if SelectedPlayer
+            and SelectedPlayer.Character
+            and SelectedPlayer.Character:FindFirstChildOfClass("Humanoid") then
+
+            Camera.CameraSubject =
+                SelectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+        end
+    end
+})
+
+TeleportTab:Button({
+    Title = "กลับมามองตัวเอง",
+    Callback = function()
+        if Player.Character then
+            Camera.CameraSubject =
+                Player.Character:FindFirstChildOfClass("Humanoid")
+        end
+    end
+})
+
+-- ====== TAB 7: Settings ======
+local ConfigTab = Window:Tab({ 
+    Title = "Settings", 
+    Icon = "settings" 
+})
+
+local notifyToggle = ConfigTab:Toggle({
+    Title = "แจ้งเตือนเมื่อกดปุ่ม",
+    Desc = "โชว์ Notify ทุกครั้งที่กดปุ่มไอเทม",
+    Flag = "notifyOnClick",
+    Value = Settings.NotifyOnClick,
+    Callback = function(state) Settings.NotifyOnClick = state end
+})
+
+local autoCloseToggle = ConfigTab:Toggle({
+    Title = "ปิดหน้าต่างอัตโนมัติหลังกด",
+    Flag = "autoClose",
+    Value = Settings.AutoClose,
+    Callback = function(state) Settings.AutoClose = state end
+})
+
+local antiAfkToggle = ConfigTab:Toggle({
+    Title = "กันเตะ AFK (Anti-AFK)",
+    Flag = "antiAfk",
+    Value = Settings.AntiAFK,
+    Callback = function(state) Settings.AntiAFK = state end
+})
+
+Players.LocalPlayer.Idled:Connect(function()
+    if Settings.AntiAFK then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
+end)
+
+ConfigTab:Divider()
+
+ConfigTab:Section({
+    Title = "จัดการเซิร์ฟเวอร์",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+ConfigTab:Button({
+    Title = "รีจอยเซิร์ฟเวอร์เดิม",
+    Icon = "refresh-cw",
+    Color = Color3.fromHex("315dff"),
+    Callback = function()
+        local ok = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+        end)
+        if not ok then
+            TeleportService:Teleport(game.PlaceId, Player)
+        end
+    end
+})
+
+ConfigTab:Button({
+    Title = "เปลี่ยนเซิร์ฟเวอร์ใหม่ (สุ่ม)",
+    Icon = "shuffle",
+    Color = Color3.fromHex("315dff"),
+    Callback = function()
+        TeleportService:Teleport(game.PlaceId, Player)
+    end
+})
+
+ConfigTab:Button({
+    Title = "ออกจากเกม",
+    Icon = "log-out",
+    Color = Color3.fromHex("ff3b3b"),
+    Callback = function()
+        Window:Dialog({
+            Title = "ยืนยันออกจากเกม",
+            Content = "ต้องการออกจากเกมตอนนี้ใช่ไหม?",
+            Buttons = {
+                {
+                    Title = "ยกเลิก",
+                    Variant = "Tertiary",
+                },
+                {
+                    Title = "ออกเกม",
+                    Variant = "Primary",
+                    Callback = function()
+                        Player:Kick("ออกจากเกมโดยผู้ใช้")
+                    end
+                }
+            }
+        })
+    end
+})
+
+ConfigTab:Divider()
+
+ConfigTab:Section({
+    Title = "บันทึกการตั้งค่า",
+    TextXAlignment = "Center",
+    Opened = true,
+    Box = true,
+})
+
+local ConfigManager = Window.ConfigManager
+local configName = "default"
+
 if ConfigManager then
     ConfigManager:Init(Window)
 

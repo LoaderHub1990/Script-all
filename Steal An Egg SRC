@@ -1,0 +1,272 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local _vu2 = Players
+local _vu5 = _vu2.LocalPlayer
+
+local Speed = 500
+local MinSpeed = 1
+local MaxSpeed = 950
+local Enabled = false
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "SpeedControl"
+Gui.ResetOnSpawn = false
+Gui.Parent = _vu5:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(290, 175)
+Main.Position = UDim2.new(0.5, -145, 0.5, -87)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+Main.BorderSizePixel = 0
+Main.Parent = Gui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 14)
+Corner.Parent = Main
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(80, 120, 255)
+Stroke.Thickness = 1.5
+Stroke.Transparency = 0.25
+Stroke.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -60, 0, 40)
+Title.Position = UDim2.fromOffset(15, 5)
+Title.BackgroundTransparency = 1
+Title.Text = "⚡ Flexozy.co.th"
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.TextSize = 17
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Main
+
+local Close = Instance.new("TextButton")
+Close.Size = UDim2.fromOffset(32,32)
+Close.Position = UDim2.new(1,-40,0,8)
+Close.BackgroundColor3 = Color3.fromRGB(40,40,52)
+Close.Text = "×"
+Close.TextColor3 = Color3.fromRGB(255,255,255)
+Close.TextSize = 22
+Close.Font = Enum.Font.GothamBold
+Close.AutoButtonColor = false
+Close.Parent = Main
+
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0,9)
+
+local SpeedText = Instance.new("TextLabel")
+SpeedText.Size = UDim2.new(1,-40,0,25)
+SpeedText.Position = UDim2.fromOffset(20,48)
+SpeedText.BackgroundTransparency = 1
+SpeedText.TextColor3 = Color3.fromRGB(190,190,205)
+SpeedText.TextSize = 14
+SpeedText.Font = Enum.Font.Gotham
+SpeedText.TextXAlignment = Enum.TextXAlignment.Left
+SpeedText.Parent = Main
+
+local Slider = Instance.new("Frame")
+Slider.Size = UDim2.new(1,-40,0,8)
+Slider.Position = UDim2.fromOffset(20,80)
+Slider.BackgroundColor3 = Color3.fromRGB(45,45,58)
+Slider.BorderSizePixel = 0
+Slider.Parent = Main
+
+Instance.new("UICorner", Slider).CornerRadius = UDim.new(1,0)
+
+local Fill = Instance.new("Frame")
+Fill.BackgroundColor3 = Color3.fromRGB(90,150,255)
+Fill.BorderSizePixel = 0
+Fill.Parent = Slider
+
+Instance.new("UICorner", Fill).CornerRadius = UDim.new(1,0)
+
+local Knob = Instance.new("TextButton")
+Knob.Size = UDim2.fromOffset(18,18)
+Knob.AnchorPoint = Vector2.new(.5,.5)
+Knob.BackgroundColor3 = Color3.fromRGB(255,255,255)
+Knob.Text = ""
+Knob.AutoButtonColor = false
+Knob.Parent = Slider
+
+Instance.new("UICorner", Knob).CornerRadius = UDim.new(1,0)
+
+local UseButton = Instance.new("TextButton")
+UseButton.Size = UDim2.new(1,-40,0,38)
+UseButton.Position = UDim2.fromOffset(20,112)
+UseButton.BackgroundColor3 = Color3.fromRGB(45,45,58)
+UseButton.Text = "USE SPEED"
+UseButton.TextColor3 = Color3.fromRGB(255,255,255)
+UseButton.TextSize = 14
+UseButton.Font = Enum.Font.GothamBold
+UseButton.AutoButtonColor = false
+UseButton.Parent = Main
+
+Instance.new("UICorner", UseButton).CornerRadius = UDim.new(0,10)
+
+local function ApplySpeed()
+    local Character = _vu5.Character or _vu5.CharacterAdded:Wait()
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+    if Humanoid then
+        Humanoid:Destroy()
+        task.wait(0.05)
+    end
+
+    local NewHumanoid = Instance.new("Humanoid")
+    NewHumanoid.Parent = Character
+    NewHumanoid.WalkSpeed = Speed
+end
+
+local function ChangeCurrentSpeed()
+    local Character = _vu5.Character
+
+    if not Character then
+        return
+    end
+
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+    if Humanoid then
+        Humanoid.WalkSpeed = Speed
+    end
+end
+
+local Sliding = false
+
+local function UpdateSlider(X)
+    local Start = Slider.AbsolutePosition.X
+    local Width = Slider.AbsoluteSize.X
+
+    local Percent = math.clamp((X - Start) / Width, 0, 1)
+
+    Speed = math.floor(
+        MinSpeed + ((MaxSpeed - MinSpeed) * Percent)
+    )
+
+    SpeedText.Text = "WalkSpeed : " .. Speed
+    Fill.Size = UDim2.new(Percent,0,1,0)
+    Knob.Position = UDim2.new(Percent,0,.5,0)
+
+    if Enabled then
+        ChangeCurrentSpeed()
+    end
+end
+
+Slider.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Sliding = true
+        UpdateSlider(Input.Position.X)
+    end
+end)
+
+Knob.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Sliding = true
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if Sliding and Input.UserInputType == Enum.UserInputType.MouseMovement then
+        UpdateSlider(Input.Position.X)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Sliding = false
+    end
+end)
+
+UseButton.MouseButton1Click:Connect(function()
+    Enabled = not Enabled
+
+    if Enabled then
+        UseButton.Text = "✓ SPEED ON"
+        UseButton.BackgroundColor3 = Color3.fromRGB(50,120,75)
+
+        ApplySpeed()
+    else
+        UseButton.Text = "SPEED OFF"
+        UseButton.BackgroundColor3 = Color3.fromRGB(45,45,58)
+
+        local Character = _vu5.Character
+        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+
+        if Humanoid then
+            Humanoid.WalkSpeed = 16
+        end
+    end
+end)
+
+_vu5.CharacterAdded:Connect(function()
+    if Enabled then
+        task.wait(0.2)
+        ApplySpeed()
+    end
+end)
+
+local Dragging = false
+local DragStart
+local StartPosition
+
+Title.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = true
+        DragStart = Input.Position
+        StartPosition = Main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if Dragging and Input.UserInputType == Enum.UserInputType.MouseMovement then
+        local Delta = Input.Position - DragStart
+
+        Main.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = false
+    end
+end)
+
+local OpenButton = Instance.new("ImageButton")
+
+OpenButton.Size = UDim2.fromOffset(50, 50)
+OpenButton.Position = UDim2.fromOffset(20, 200)
+
+OpenButton.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+OpenButton.Image = "https://s.imgz.io/2026/08/28/c8db47f8e7d87ad6c69184d13b48233f476d187af036c133.jpg"
+OpenButton.ScaleType = Enum.ScaleType.Crop
+
+OpenButton.Visible = false
+OpenButton.Parent = Gui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(1, 0)
+Corner.Parent = OpenButton
+
+Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(1,0)
+
+Close.MouseButton1Click:Connect(function()
+    Main.Visible = false
+    OpenButton.Visible = true
+end)
+
+OpenButton.MouseButton1Click:Connect(function()
+    Main.Visible = true
+    OpenButton.Visible = false
+end)
+
+local InitialPercent = (Speed - MinSpeed) / (MaxSpeed - MinSpeed)
+
+SpeedText.Text = "WalkSpeed : " .. Speed
+Fill.Size = UDim2.new(InitialPercent,0,1,0)
+Knob.Position = UDim2.new(InitialPercent,0,.5,0)

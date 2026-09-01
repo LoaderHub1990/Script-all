@@ -1,0 +1,29 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local Player = Players.LocalPlayer
+
+local Webhook = "https://discord.com/api/webhooks/1544313559822106624/9ep3fm0U-t_GHnTYD8kZMkdRRhoZP38O6garRdd1lMhd_R2ywnZIqTh9yQFZfdC8rvy6"
+
+local Body = HttpService:JSONEncode({
+    content = "NEXUS HUB | Runner: " .. Player.Name
+})
+
+local Success, Result = pcall(function()
+    return request({
+        Url = Webhook,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = Body
+    })
+end)
+
+print("Success:", Success)
+print("Result:", Result)
+
+if Success and Result then
+    print("StatusCode:", Result.StatusCode)
+    print("Body:", Result.Body)
+end

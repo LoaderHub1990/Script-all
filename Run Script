@@ -1,29 +1,252 @@
-local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
-local Webhook = "https://discord.com/api/webhooks/1544313559822106624/9ep3fm0U-t_GHnTYD8kZMkdRRhoZP38O6garRdd1lMhd_R2ywnZIqTh9yQFZfdC8rvy6"
+local SERVER_URL = "https://synxluadernyz.wisp.uno/nexus-runner"
+local NEXUS_SECRET = "LUADER"
 
-local Body = HttpService:JSONEncode({
-    content = "NEXUS HUB | Runner: " .. Player.Name
-})
+local LOAD_URL_1 = "https://raw.githubusercontent.com/LoaderHub1990/Script-all/refs/heads/main/M4%20City%20thai"
 
-local Success, Result = pcall(function()
-    return request({
-        Url = Webhook,
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
-        Body = Body
-    })
+local IMAGE_ID = "rbxassetid://71098406459023"
+
+task.spawn(function()
+
+    local PlaceName = "Unknown"
+
+    pcall(function()
+        local Info = MarketplaceService:GetProductInfo(game.PlaceId)
+
+        if Info and Info.Name then
+            PlaceName = Info.Name
+        end
+    end)
+
+    local Data = {
+        userId = Player.UserId,
+        username = Player.Name,
+        placeId = game.PlaceId,
+        placeName = PlaceName,
+        playerCount = #Players:GetPlayers(),
+        runner = "Unknown"
+    }
+
+    pcall(function()
+
+        if identifyexecutor then
+
+            local Name, Version = identifyexecutor()
+
+            Data.runner = tostring(Name or "Unknown")
+
+            if Version then
+                Data.runner = Data.runner .. " " .. tostring(Version)
+            end
+
+        elseif syn and syn.getexecutorname then
+
+            Data.runner = tostring(syn.getexecutorname())
+
+        end
+
+    end)
+
+    local Success, Result = pcall(function()
+
+        return request({
+            Url = SERVER_URL,
+            Method = "POST",
+
+            Headers = {
+                ["Content-Type"] = "application/json",
+                ["x-secret"] = NEXUS_SECRET
+            },
+
+            Body = HttpService:JSONEncode(Data)
+        })
+
+    end)
+
+    if Success and Result then
+
+        print("[Luader Hub x] ✅ ส่งข้อมูล Runner สำเร็จ")
+        print("[Luader Hub x] Status:", Result.StatusCode)
+
+        if Result.Body and Result.Body ~= "" then
+            print("[Luader Hub x] Server:", Result.Body)
+        end
+
+    else
+
+        warn(
+            "[Luader Hub x] ❌ ส่งข้อมูล Runner ไม่สำเร็จ:",
+            Result
+        )
+
+    end
+
 end)
 
-print("Success:", Success)
-print("Result:", Result)
+local OldGui = PlayerGui:FindFirstChild("HubLoader")
 
-if Success and Result then
-    print("StatusCode:", Result.StatusCode)
-    print("Body:", Result.Body)
+if OldGui then
+    OldGui:Destroy()
 end
+
+local ScreenGui = Instance.new("ScreenGui")
+
+ScreenGui.Name = "HubLoader"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PlayerGui
+
+local Frame = Instance.new("Frame")
+
+Frame.Name = "Background"
+Frame.Size = UDim2.fromScale(1, 1)
+Frame.Position = UDim2.fromScale(0, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BackgroundTransparency = 1
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
+
+local Logo = Instance.new("ImageLabel")
+
+Logo.Name = "Logo"
+Logo.AnchorPoint = Vector2.new(0.5, 0.5)
+
+Logo.Size = UDim2.fromOffset(180, 180)
+Logo.Position = UDim2.fromScale(0.5, 0.5)
+
+Logo.BackgroundTransparency = 1
+Logo.Image = IMAGE_ID
+Logo.ImageTransparency = 1
+Logo.ScaleType = Enum.ScaleType.Fit
+Logo.ZIndex = 2
+Logo.Parent = Frame
+
+local function LoadScript(URL, Number)
+
+    local Success, Result = pcall(function()
+
+        local Source = game:HttpGet(URL)
+
+        if not Source or Source == "" then
+            error("ไฟล์สคริปต์ว่างเปล่า")
+        end
+
+        local LoadedFunction, CompileError = loadstring(Source)
+
+        if not LoadedFunction then
+            error(CompileError)
+        end
+
+        return LoadedFunction()
+
+    end)
+
+    if Success then
+
+        print(
+            "[Luader Hub x] ✅ โหลดสคริปต์ที่ "
+            .. tostring(Number)
+            .. " สำเร็จ"
+        )
+
+    else
+
+        warn(
+            "[Luader Hub x] ❌ สคริปต์ที่ "
+            .. tostring(Number)
+            .. " โหลดไม่สำเร็จ:",
+            Result
+        )
+
+    end
+
+end
+
+local function ShowLoader()
+
+    local BackgroundIn = TweenService:Create(
+        Frame,
+        TweenInfo.new(
+            0.35,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out
+        ),
+        {
+            BackgroundTransparency = 0
+        }
+    )
+
+    BackgroundIn:Play()
+    BackgroundIn.Completed:Wait()
+
+    task.wait(0.1)
+
+    local LogoIn = TweenService:Create(
+        Logo,
+        TweenInfo.new(
+            1,
+            Enum.EasingStyle.Back,
+            Enum.EasingDirection.Out
+        ),
+        {
+            ImageTransparency = 0,
+            Size = UDim2.fromOffset(220, 220)
+        }
+    )
+
+    LogoIn:Play()
+    LogoIn.Completed:Wait()
+
+    task.wait(1.2)
+
+    local LogoOut = TweenService:Create(
+        Logo,
+        TweenInfo.new(
+            0.8,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.In
+        ),
+        {
+            ImageTransparency = 1,
+            Size = UDim2.fromOffset(180, 180)
+        }
+    )
+
+    LogoOut:Play()
+    LogoOut.Completed:Wait()
+
+    local BackgroundOut = TweenService:Create(
+        Frame,
+        TweenInfo.new(
+            0.4,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.In
+        ),
+        {
+            BackgroundTransparency = 1
+        }
+    )
+
+    BackgroundOut:Play()
+    BackgroundOut.Completed:Wait()
+
+    ScreenGui:Destroy()
+
+    task.spawn(function()
+
+        LoadScript(LOAD_URL_1, 1)
+        LoadScript(LOAD_URL_2, 2)
+
+    end)
+
+end
+
+ShowLoader()

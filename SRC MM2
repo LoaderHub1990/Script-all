@@ -1,0 +1,3019 @@
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+if game.PlaceId ~= 142823291 then
+    return
+end
+
+-- LOAD UI
+
+local WindUI = loadstring(game:HttpGet(
+    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+))()
+
+WindUI:AddTheme({
+    Name       = "RedTheme",
+
+    Accent     = Color3.fromHex("#00CFFF"),
+
+    Background = WindUI:Gradient({
+        ["0"]   = { Color = Color3.fromHex("#123B52"), Transparency = 0 },
+        ["100"] = { Color = Color3.fromHex("#071D2B"), Transparency = 0 },
+    }, {
+        Rotation = 90,
+    }),
+
+    Outline     = Color3.fromHex("#55E5FF"),
+    Text        = Color3.fromHex("#FFFFFF"),
+    Placeholder = Color3.fromHex("#9DD9E8"),
+    Button      = Color3.fromHex("#15506A"),
+    Icon        = Color3.fromHex("#6DEAFF"),
+})
+
+-- SERVICES
+
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local TeleportService   = game:GetService("TeleportService")
+
+local RS = RunService
+local LocalPlayer = Players.LocalPlayer
+
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Root = Character:WaitForChild("HumanoidRootPart")
+local Camera = workspace.CurrentCamera
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    Root = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- QUICK ACTION BUTTONS
+
+local function CreateStylishButton(name, text, position, imageId)
+
+    local Gui = Instance.new("ScreenGui")
+
+    Gui.Name = name .. "Gui"
+    Gui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+    Gui.Enabled = false
+
+    local Button = Instance.new("TextButton")
+
+    Button.Name = name .. "Button"
+    Button.Parent = Gui
+    Button.BackgroundColor3 = Color3.fromRGB(10, 45, 60)
+    Button.BackgroundTransparency = 0.5
+    Button.Position = position
+    Button.Size = UDim2.new(0, 80, 0, 90)
+    Button.Font = Enum.Font.GothamBold
+    Button.Text = ""
+    Button.Draggable = true
+
+    local Stroke = Instance.new("UIStroke", Button)
+    Stroke.Thickness = 2.5
+    Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    Stroke.Color = Color3.fromRGB(255, 255, 255)
+
+    local Gradient = Instance.new("UIGradient", Stroke)
+    Gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 220, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 120, 180))
+    }
+
+    local Corner = Instance.new("UICorner", Button)
+    Corner.CornerRadius = UDim.new(0, 14)
+
+    local BgGradient = Instance.new("UIGradient", Button)
+    BgGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 90, 120)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 35, 50))
+    }
+    BgGradient.Rotation = 90
+
+local Image = Instance.new("ImageLabel")
+
+Image.Name = "Icon"
+Image.Parent = Button
+Image.BackgroundTransparency = 1
+Image.Size = UDim2.new(0, 48, 0, 48)
+Image.Position = UDim2.new(0.5, -24, 0, 8)
+Image.Image = "rbxassetid://" .. tostring(imageId)
+Image.ScaleType = Enum.ScaleType.Fit
+
+local Label = Instance.new("TextLabel")
+
+Label.Name = "Label"
+Label.Parent = Button
+Label.BackgroundTransparency = 1
+Label.Size = UDim2.new(1, 0, 0, 22)
+Label.Position = UDim2.new(0, 0, 1, -24)
+Label.Font = Enum.Font.GothamBold
+Label.Text = text
+Label.TextColor3 = Color3.fromRGB(190, 245, 255)
+Label.TextSize = 10
+Label.TextXAlignment = Enum.TextXAlignment.Center
+Label.TextStrokeTransparency = 0.5
+Label.TextStrokeColor3 = Color3.fromRGB(0, 110, 150)
+
+return Gui, Button
+end
+
+local ShootGui, ShootButton = CreateStylishButton(
+    "Shoot",
+    "SHOOT",
+    UDim2.new(0.5, -125, 0.8, 0),
+    97594928468157
+)
+
+local ThrowGui, ThrowButton = CreateStylishButton(
+    "Throw",
+    "THROW",
+    UDim2.new(0.5, -35, 0.8, 0),
+    17689682126
+)
+
+local KillGui, KillButton = CreateStylishButton(
+    "KillAll",
+    "KILL ALL",
+    UDim2.new(0.5, 55, 0.8, 0),
+    137278198363013
+)
+
+-- GLOBALS
+
+getgenv().enableGodmode  = false
+getgenv().ESP_ENABLED    = false
+getgenv().GunEsp         = false
+getgenv().AutoShoot      = false
+getgenv().ShootMode      = "Wallbang"
+getgenv().AGG            = false
+getgenv().KeepWalkspeed  = false
+getgenv().InfiniteJump   = false
+getgenv().Noclip         = false
+getgenv().AutoFarmCoins  = false
+getgenv().FarmSpeed      = 21
+getgenv().MurderAim      = false
+getgenv().AntiFling      = false
+getgenv().AimAssist      = false
+getgenv().PointBlank     = false
+getgenv().ShowFOV        = false
+getgenv().FOVSize        = 150
+getgenv().Walkspeed      = 16
+getgenv().Jumppower      = 50
+getgenv().timeout        = 2.5
+getgenv().AimlockEnabled = false
+getgenv().AimlockPart    = "HumanoidRootPart"
+getgenv().ESPLine_ENABLED = false
+getgenv().KillAllEnabled = false  -- เพิ่มตัวแปรนี้
+
+local auraEnabled = false
+
+-- WINDOW
+
+local Window = WindUI:CreateWindow({
+Title = '<font color="#00BFFF">F</font><font color="#18C5FF">!</font><font color="#30CBFF">e</font><font color="#48D1FF">x</font><font color="#60D7FF">o</font><font color="#78DDFF">z</font><font color="#90E3FF">y</font> <font color="#A8E9FF">H</font><font color="#C0EFFF">u</font><font color="#D8F7FF">b</font> <font color="#FFFFFF">X</font>',
+    Icon         = "https://i.postimg.cc/GpHcvDCJ/31b51c63-e385-4350-8350-31ee9276ee5a-removebg-preview.png",
+    Author       = "By F!exozy Hub X",
+    Size         = UDim2.fromOffset(580, 460),
+    Transparent  = true,
+    Theme        = "RedTheme",
+    SideBarWidth = 200,
+
+    User = {
+        Enabled   = true,
+        Anonymous = false,
+        Callback  = function()
+            WindUI:Notify({
+                Title    = "F!exozy Hub X",
+                Content  = "Welcome, " .. LocalPlayer.Name .. "!",
+                Duration = 3,
+            })
+        end,
+    }
+})
+
+Window:EditOpenButton({
+    Title           = "F!exozy Hub X",
+    Icon            = "https://i.postimg.cc/GpHcvDCJ/31b51c63-e385-4350-8350-31ee9276ee5a-removebg-preview.png",
+    CornerRadius    = UDim.new(0, 16),
+    StrokeThickness = 2,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,    Color3.fromHex("4a0000")),
+        ColorSequenceKeypoint.new(0.35, Color3.fromHex("990000")),
+        ColorSequenceKeypoint.new(0.65, Color3.fromHex("cc0000")),
+        ColorSequenceKeypoint.new(1,    Color3.fromHex("ff3333")),
+    }),
+    OnlyMobile = false,
+    Enabled    = true,
+    Draggable  = true,
+})
+
+WindUI:Popup({
+    Title = "Hello world",
+    Icon = "info",
+    Content = "ลิ้งดิสใหม่กด Copy Discord ได้เลย",
+    Buttons = {
+        {
+            Title = "Copy Discord",
+            Icon = "copy",
+            Callback = function()
+                local discordLink = "https://discord.gg/z4gh7wjp6Z"
+                setclipboard(discordLink)
+
+                WindUI:Notify({
+                    Title = "Copied!",
+                    Content = "Discord link copied to clipboard",
+                    Icon = "check",
+                    Duration = 3,
+                })
+            end,
+            Variant = "Tertiary",
+        },
+        {
+            Title = "Continue",
+            Icon = "arrow-right",
+            Callback = function() end,
+            Variant = "Primary",
+        }
+    }
+})
+
+Window:Tag({
+    Title = "เวอร์ชั่น 3.3.1",
+    Icon  = "star",
+    Color = Color3.fromRGB(0, 207, 255)
+})
+
+Window:Tag({
+    Title = "Dis: F!exozy.co.th",
+    Icon  = "rocket",
+    Color = Color3.fromRGB(85, 229, 255)
+})
+
+-- ORGANIZED TABS
+
+local HomeTab = Window:Tab({
+    Title = "Home",
+    Icon = "home"
+})
+
+Window:Divider()
+
+local CombatTab = Window:Tab({
+    Title = "Combat",
+    Icon = "swords"
+})
+
+local EspTab = Window:Tab({
+    Title = "ESP",
+    Icon = "eye"
+})
+
+Window:Divider()
+
+local LocalTab = Window:Tab({
+    Title = "Player",
+    Icon = "user"
+})
+
+local TeleportTab = Window:Tab({
+    Title = "Teleport",
+    Icon = "send"
+})
+
+local TabAudio = Window:Tab({
+    Title = "Music",
+    Icon = "headphones"
+})
+
+Window:Divider()
+
+local KeybindTab = Window:Tab({
+    Title = "Keybinds",
+    Icon = "keyboard"
+})
+
+local TabSetting = Window:Tab({
+    Title = "Settings",
+    Icon = "settings"
+})
+
+-- SHARED FUNCTIONS
+
+local function getCharacter(plr)
+    return plr.Character
+end
+
+local function getHumanoid(plr)
+    local char = getCharacter(plr)
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRoot(plr)
+    local char = getCharacter(plr)
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getGunDrop()
+    return workspace:FindFirstChild("GunDrop", true)
+end
+
+local function getRoles()
+    local remote = ReplicatedStorage:FindFirstChild("GetPlayerData", true)
+
+    if not remote then
+        warn("GetPlayerData not found")
+        return {}
+    end
+
+    local success, result = pcall(function()
+        return remote:InvokeServer()
+    end)
+
+    if not success then
+        warn(result)
+        return {}
+    end
+
+    local roles = {}
+
+    for plrName, data in pairs(result) do
+        if not data.Dead then
+            roles[plrName] = data.Role
+        end
+    end
+
+    return roles
+end
+
+local function GetMurdererHead()
+    local roles = getRoles()
+
+    for plrName, role in pairs(roles) do
+        if role == "Murderer" then
+            local target = Players:FindFirstChild(plrName)
+
+            if target
+                and target ~= LocalPlayer
+                and target.Character
+                and target.Character:FindFirstChild("Head")
+                and target.Character:FindFirstChild("Humanoid")
+                and target.Character.Humanoid.Health > 0
+            then
+                return target.Character.Head, target
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+-- SHOOT MURDERER
+
+local function ShootMurdererAction()
+    local _, targetPlayer = GetMurdererHead()
+
+    if not targetPlayer
+        or not targetPlayer.Character
+        or not targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    then
+        warn("ไม่พบ Murderer หรือเป้าหมายไม่อยู่")
+        return
+    end
+
+    local Gun =
+        LocalPlayer.Character:FindFirstChild("Gun")
+        or LocalPlayer.Backpack:FindFirstChild("Gun")
+
+    if not Gun then
+        warn("คุณไม่มีปืน!")
+        return
+    end
+
+    local ShootRemote = Gun:FindFirstChild("Shoot")
+
+    if not ShootRemote then
+        warn("ไม่พบ Remote Shoot")
+        return
+    end
+
+    local HRP = targetPlayer.Character.HumanoidRootPart
+    local TargetPos = HRP.Position
+    local Velocity = HRP.AssemblyLinearVelocity
+    local IsJumping = Velocity.Y > 1
+
+    if getgenv().ShootMode == "Wallbang" then
+
+        local PredictOffset = Velocity * 0.08
+        local PredictedPos = TargetPos + PredictOffset
+
+        local JumpOffset =
+            IsJumping
+            and Vector3.new(0, math.abs(Velocity.Y) * 0.1, 0)
+            or Vector3.zero
+
+        local shootPoints = {
+            PredictedPos + JumpOffset,
+            PredictedPos + JumpOffset + Vector3.new(0, 1, 0),
+            PredictedPos + JumpOffset - Vector3.new(0, 1, 0),
+        }
+
+        for _, pos in ipairs(shootPoints) do
+            ShootRemote:FireServer(
+                CFrame.new(
+                    pos + (-HRP.CFrame.LookVector * 3),
+                    pos
+                ),
+                CFrame.new(pos)
+            )
+        end
+
+    elseif getgenv().ShootMode == "Silent Aim" then
+
+        local myChar = LocalPlayer.Character
+        if not myChar then return end
+
+        local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+
+        local myPos = myHRP.Position
+
+        local PredictOffset = Velocity * 0.1
+        local PredictedPos = TargetPos + PredictOffset
+
+        local JumpOffset =
+            IsJumping
+            and Vector3.new(0, math.abs(Velocity.Y) * 0.1, 0)
+            or Vector3.zero
+
+        local FinalTarget = PredictedPos + JumpOffset
+
+        local shootPoints = {
+            FinalTarget,
+            FinalTarget + Vector3.new(0, 1, 0),
+            FinalTarget - Vector3.new(0, 0.5, 0),
+        }
+
+        for _, pos in ipairs(shootPoints) do
+            ShootRemote:FireServer(
+                CFrame.new(myPos, pos),
+                CFrame.new(pos)
+            )
+        end
+    end
+end
+
+ShootButton.MouseButton1Click:Connect(function()
+    ShootMurdererAction()
+end)
+
+-- THROW KNIFE
+
+local function ThrowKnifeAction()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer
+            and player.Character
+            and player.Character:FindFirstChild("HumanoidRootPart")
+        then
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+
+            if hum and hum.Health > 0 then
+                local dist =
+                    (player.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
+
+                if dist < shortestDistance then
+                    shortestDistance = dist
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+
+    if not closestPlayer then
+        warn("ไม่พบเป้าหมาย!")
+        return
+    end
+
+    local Knife = myChar:FindFirstChild("Knife")
+
+    if not Knife then
+        local bpKnife = LocalPlayer.Backpack:FindFirstChild("Knife")
+
+        if bpKnife then
+            myChar:FindFirstChildOfClass("Humanoid"):EquipTool(bpKnife)
+            task.wait(0.15)
+            Knife = myChar:FindFirstChild("Knife")
+        end
+    end
+
+    if not Knife then
+        warn("ไม่มีมีด!")
+        return
+    end
+
+    local Events = Knife:FindFirstChild("Events")
+
+    if not Events then
+        warn("หา Events ไม่เจอ!")
+        return
+    end
+
+    local ThrowRemote = Events:FindFirstChild("KnifeThrown")
+
+    if not ThrowRemote then
+        warn("หา KnifeThrown ไม่เจอ!")
+        return
+    end
+
+    local targetPos =
+        closestPlayer.Character.HumanoidRootPart.Position
+
+    local myPos = myRoot.Position
+
+    ThrowRemote:FireServer(
+        CFrame.new(myPos, targetPos),
+        CFrame.new(targetPos)
+    )
+end
+
+ThrowButton.MouseButton1Click:Connect(ThrowKnifeAction)
+
+-- FLING
+
+local function SHubFling(TargetPlayer)
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    local myRoot = myHum and myHum.RootPart
+
+    if not myRoot or not myHum then return end
+
+    local TCharacter = TargetPlayer.Character
+    if not TCharacter then return end
+
+    local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter:FindFirstChild("Head")
+
+    local Accessory =
+        TCharacter:FindFirstChildOfClass("Accessory")
+
+    local Handle =
+        Accessory and Accessory:FindFirstChild("Handle")
+
+    if not (TRootPart or THead or Handle) then
+        return
+    end
+
+    local OldPos = myRoot.CFrame
+
+    repeat
+        task.wait()
+        workspace.CurrentCamera.CameraSubject =
+            THead or Handle or THumanoid
+    until workspace.CurrentCamera.CameraSubject ==
+        (THead or Handle or THumanoid)
+
+    local function FPos(BasePart, Pos, Ang)
+        local targetCF =
+            CFrame.new(BasePart.Position) * Pos * Ang
+
+        myRoot.CFrame = targetCF
+        myChar:SetPrimaryPartCFrame(targetCF)
+
+        myRoot.Velocity =
+            Vector3.new(9e7, 9e8, 9e7)
+
+        myRoot.RotVelocity =
+            Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local function SFBasePart(BasePart)
+        local start = tick()
+        local angle = 0
+
+        repeat
+            if myRoot and THumanoid then
+                angle = angle + 100
+
+                for _, offset in ipairs({
+                    CFrame.new(0, 1.5, 0),
+                    CFrame.new(0, -1.5, 0),
+                    CFrame.new(2.25, 1.5, -2.25),
+                    CFrame.new(-2.25, -1.5, 2.25)
+                }) do
+                    FPos(
+                        BasePart,
+                        offset + THumanoid.MoveDirection,
+                        CFrame.Angles(math.rad(angle), 0, 0)
+                    )
+
+                    task.wait()
+                end
+            end
+        until BasePart.Velocity.Magnitude > 500
+            or tick() - start > getgenv().timeout
+    end
+
+    local BV = Instance.new("BodyVelocity")
+
+    BV.Name = "FlingForce"
+    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    BV.Parent = myRoot
+
+    myHum:SetStateEnabled(
+        Enum.HumanoidStateType.Seated,
+        false
+    )
+
+    local target = TRootPart or THead or Handle
+
+    if target then
+        SFBasePart(target)
+    end
+
+    BV:Destroy()
+
+    myHum:SetStateEnabled(
+        Enum.HumanoidStateType.Seated,
+        true
+    )
+
+    repeat
+        task.wait()
+        workspace.CurrentCamera.CameraSubject = myHum
+    until workspace.CurrentCamera.CameraSubject == myHum
+
+    repeat
+        local cf = OldPos * CFrame.new(0, 0.5, 0)
+
+        myRoot.CFrame = cf
+        myChar:SetPrimaryPartCFrame(cf)
+
+        myHum:ChangeState("GettingUp")
+
+        for _, part in ipairs(myChar:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.Velocity = Vector3.zero
+                part.RotVelocity = Vector3.zero
+            end
+        end
+
+        task.wait()
+    until (myRoot.Position - OldPos.Position).Magnitude < 25
+end
+
+
+HomeTab:Section({
+    Title = "Information",
+    Icon = "info"
+})
+
+HomeTab:Paragraph({
+    Title = "F!exozy Hub X | Discord",
+    Desc = "discord support | ดิสคอร์ดสำหรับแจ้งปัญหา",
+    Image = "rbxassetid://71098406459023",
+    ImageSize = 50,
+
+    Buttons = {
+        {
+            Icon = "copy",
+            Title = "Copy",
+
+            Callback = function()
+                setclipboard(
+                    "https://discord.gg/WFUejxeggt"
+                )
+
+                WindUI:Notify({
+                    Title = "Copied!",
+                    Content = "คัดลอก Discord แล้ว",
+                    Duration = 2,
+                    Icon = "check"
+                })
+            end
+        }
+    }
+})
+
+-- HOME / AUTOMATION
+
+HomeTab:Section({
+    Title = "Automation",
+    Icon = "rocket"
+})
+
+HomeTab:Toggle({
+    Title = "AutoFarm Coin",
+    Desc = "ออโต้ฟาร์มเงิน",
+    Value = false,
+
+    Callback = function(state)
+        getgenv().AutoFarmCoins = state
+
+        if not state then
+            return
+        end
+
+        local visited = {}
+        local TweenSvc = game:GetService("TweenService")
+
+        task.spawn(function()
+            while getgenv().AutoFarmCoins do
+                local char =
+                    LocalPlayer.Character
+                    or LocalPlayer.CharacterAdded:Wait()
+
+                local humPart =
+                    char:FindFirstChild("HumanoidRootPart")
+
+                if humPart then
+                    local closest, dist = nil, math.huge
+
+                    for _, obj in ipairs(workspace:GetDescendants()) do
+                        if obj:IsA("BasePart")
+                            and obj.Name == "Coin_Server"
+                            and not visited[obj]
+                        then
+                            local d =
+                                (obj.Position - humPart.Position).Magnitude
+
+                            if d < dist and d <= 250 then
+                                closest = obj
+                                dist = d
+                            end
+                        end
+                    end
+
+                    if closest and closest.Parent then
+                        visited[closest] = true
+
+                        local tween = TweenSvc:Create(
+                            humPart,
+                            TweenInfo.new(
+                                dist / getgenv().FarmSpeed,
+                                Enum.EasingStyle.Linear
+                            ),
+                            {
+                                CFrame = CFrame.new(
+                                    closest.Position
+                                )
+                            }
+                        )
+
+                        tween:Play()
+                        tween.Completed:Wait()
+                    end
+                end
+
+                task.wait(0.01)
+            end
+        end)
+    end
+})
+
+HomeTab:Slider({
+    Title = "Farm Speed",
+    Desc = "ความเร็วเก็บเหรียญ",
+    Step = 5,
+
+    Value = {
+        Min = 10,
+        Max = 30,
+        Default = 21
+    },
+
+    Callback = function(v)
+        getgenv().FarmSpeed = v
+    end
+})
+
+-- HOME / PROTECTION
+
+HomeTab:Section({
+    Title = "Protection",
+    Icon = "shield"
+})
+
+local antiFlingConn = nil
+local antiFlingCharConn = nil
+
+local function applyAntiFling()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+
+                    for _, enemyPart in ipairs(
+                        plr.Character:GetDescendants()
+                    ) do
+                        if enemyPart:IsA("BasePart") then
+                            local nc =
+                                Instance.new("NoCollisionConstraint")
+
+                            nc.Part0 = part
+                            nc.Part1 = enemyPart
+                            nc.Parent = char
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function clearAntiFling()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("NoCollisionConstraint") then
+            v:Destroy()
+        end
+    end
+end
+
+HomeTab:Toggle({
+    Title = "Anti Fling",
+    Desc = "กันโดนดีด",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().AntiFling = v
+
+        if v then
+            applyAntiFling()
+
+            antiFlingConn =
+                Players.PlayerAdded:Connect(function(plr)
+
+                    plr.CharacterAdded:Connect(function()
+                        task.wait(1)
+
+                        if getgenv().AntiFling then
+                            applyAntiFling()
+                        end
+                    end)
+                end)
+
+            antiFlingCharConn =
+                LocalPlayer.CharacterAdded:Connect(function()
+                    task.wait(0.5)
+
+                    if getgenv().AntiFling then
+                        applyAntiFling()
+                    end
+                end)
+
+        else
+            clearAntiFling()
+
+            if antiFlingConn then
+                antiFlingConn:Disconnect()
+                antiFlingConn = nil
+            end
+
+            if antiFlingCharConn then
+                antiFlingCharConn:Disconnect()
+                antiFlingCharConn = nil
+            end
+        end
+    end
+})
+
+-- HOME / UTILITIES
+
+HomeTab:Section({
+    Title = "Utilities",
+    Icon = "wrench"
+})
+
+HomeTab:Button({
+    Title = "Unlock Camera Zoom",
+    Desc = "ปลดล็อคระยะซูมกล้อง",
+
+    Callback = function()
+        LocalPlayer.CameraMinZoomDistance = 0
+        LocalPlayer.CameraMaxZoomDistance = math.huge
+    end
+})
+
+HomeTab:Section({
+    Title = "Emotes",
+    Icon = "smile"
+})
+
+HomeTab:Button({
+    Title = "Unlock All Emotes",
+    Desc = "ปลดล็อคท่าเต้นทั้งหมด",
+
+    Callback = function()
+        local ok, err = pcall(function()
+            local Emotes =
+                require(
+                    ReplicatedStorage.Database.Sync
+                ).Emotes
+
+            local ChangeInv =
+                ReplicatedStorage.Remotes
+                .Inventory
+                .ChangeInventoryItem
+
+            local count = 0
+
+            for i in pairs(Emotes) do
+                firesignal(
+                    ChangeInv.OnClientEvent,
+                    "Emotes",
+                    i,
+                    1
+                )
+
+                count += 1
+            end
+
+            WindUI:Notify({
+                Title = "Emotes Unlocked!",
+                Content =
+                    "ปลดล็อคสำเร็จ " ..
+                    count ..
+                    " ท่า",
+                Duration = 3,
+                Icon = "check"
+            })
+        end)
+
+        if not ok then
+            warn("Emote Error: " .. tostring(err))
+
+            WindUI:Notify({
+                Title = "Error!",
+                Content =
+                    "ปลดล็อคไม่สำเร็จ: " ..
+                    tostring(err),
+                Duration = 3,
+                Icon = "x"
+            })
+        end
+    end
+})
+
+-- HOME / FLING
+
+HomeTab:Section({
+    Title = "Fling",
+    Icon = "zap"
+})
+
+HomeTab:Slider({
+    Title = "Fling Timeout",
+    Step = 0.5,
+
+    Value = {
+        Min = 0.5,
+        Max = 10,
+        Default = 2.5
+    },
+
+    Callback = function(v)
+        getgenv().timeout = v
+    end
+})
+
+local PlayerList = {}
+local SelectedPlayer = nil
+
+for _, plr in pairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        table.insert(PlayerList, plr.Name)
+    end
+end
+
+HomeTab:Dropdown({
+    Title = "Select Player",
+    Desc = "เลือกผู้เล่น",
+    Values = PlayerList,
+    Multi = false,
+
+    Callback = function(v)
+        SelectedPlayer = v
+    end
+})
+
+HomeTab:Button({
+    Title = "Fling Selected Player",
+    Desc = "เตะผู้เล่นกระเด็นออกแมพ",
+
+    Callback = function()
+        if not SelectedPlayer then return end
+
+        local target =
+            Players:FindFirstChild(SelectedPlayer)
+
+        if target and target ~= LocalPlayer then
+            SHubFling(target)
+        end
+    end
+})
+
+HomeTab:Button({
+    Title = "Fling All Players",
+    Desc = "เตะทุกคนออกแมพ",
+
+    Callback = function()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+
+                local hum =
+                    plr.Character:FindFirstChildOfClass(
+                        "Humanoid"
+                    )
+
+                if hum and hum.Health > 0 then
+                    task.spawn(function()
+                        SHubFling(plr)
+                    end)
+
+                    task.wait(
+                        getgenv().timeout + 0.5
+                    )
+                end
+            end
+        end
+    end
+})
+
+HomeTab:Button({
+    Title = "Fling Murderer",
+    Desc = "เตะฆาตกรออกแมพ",
+
+    Callback = function()
+        for plr, role in pairs(getRoles()) do
+            if role == "Murderer" then
+
+                local target =
+                    Players:FindFirstChild(plr)
+
+                if target and target ~= LocalPlayer then
+                    SHubFling(target)
+                    break
+                end
+            end
+        end
+    end
+})
+
+HomeTab:Button({
+    Title = "Fling Sheriff/Hero",
+    Desc = "เตะนายอำเภอ/ฮีโร่ออกแมพ",
+
+    Callback = function()
+        for plr, role in pairs(getRoles()) do
+            if role == "Sheriff"
+                or role == "Hero"
+            then
+
+                local target =
+                    Players:FindFirstChild(plr)
+
+                if target and target ~= LocalPlayer then
+                    SHubFling(target)
+                    break
+                end
+            end
+        end
+    end
+})
+
+
+CombatTab:Section({
+    Title = "Murderer",
+    Icon = "skull"
+})
+
+-- แก้ไขปุ่ม Kill All ให้ใช้ getgenv().KillAllEnabled
+CombatTab:Toggle({
+    Title = "Kill All",
+    Desc = "ฆ่าทั้งหมด",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().KillAllEnabled = v
+        auraEnabled = v
+    end
+})
+
+CombatTab:Button({
+    Title = "Kill Sheriff/Hero",
+    Desc = "ฆ่านายอำเภอ/ฮีโร่",
+
+    Callback = function()
+        if not Root then return end
+
+        local myChar = LocalPlayer.Character
+        if not myChar then return end
+
+        local Knife = myChar:FindFirstChild("Knife")
+
+        if not Knife then
+            local bpKnife =
+                LocalPlayer.Backpack:FindFirstChild("Knife")
+
+            if bpKnife then
+                myChar:FindFirstChildOfClass(
+                    "Humanoid"
+                ):EquipTool(bpKnife)
+
+                task.wait(0.15)
+            end
+        end
+
+        for plr, role in pairs(getRoles()) do
+            if role == "Sheriff"
+                or role == "Hero"
+            then
+
+                local target =
+                    Players:FindFirstChild(plr)
+
+                if target
+                    and target ~= LocalPlayer
+                    and target.Character
+                then
+
+                    local enemyRoot =
+                        target.Character:FindFirstChild(
+                            "HumanoidRootPart"
+                        )
+
+                    if enemyRoot then
+                        enemyRoot.CFrame =
+                            Root.CFrame *
+                            CFrame.new(0, 0, -3)
+
+                        task.spawn(function()
+                            for i = 1, 15 do
+                                if enemyRoot and Root then
+                                    enemyRoot.CFrame =
+                                        Root.CFrame *
+                                        CFrame.new(0, 0, -3)
+                                end
+
+                                task.wait(0.03)
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+})
+
+CombatTab:Button({
+    Title = "Throw Knife",
+    Desc = "ปามีดใส่ผู้เล่น",
+
+    Callback = function()
+        ThrowKnifeAction()
+    end
+})
+
+-- COMBAT / SHERIFF
+
+CombatTab:Section({
+    Title = "Sheriff",
+    Icon = "crosshair"
+})
+
+local aimlockConn = nil
+
+CombatTab:Dropdown({
+    Title = "Aimlock Target Part",
+    Desc = "เลือกจุดที่จะล็อค",
+
+    Values = {
+        "HumanoidRootPart",
+        "Head",
+        "UpperTorso",
+        "RightArm",
+        "LeftArm"
+    },
+
+    Multi = false,
+    Value = "HumanoidRootPart",
+
+    Callback = function(v)
+        getgenv().AimlockPart = v
+    end
+})
+
+CombatTab:Toggle({
+    Title = "Aimlock Murder",
+    Desc = "ล็อคเป้าฆาตกร",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().AimlockEnabled = v
+
+        if v then
+            aimlockConn =
+                RS.RenderStepped:Connect(function()
+
+                    if not getgenv().AimlockEnabled then
+                        return
+                    end
+
+                    local _, targetPlayer =
+                        GetMurdererHead()
+
+                    if not targetPlayer
+                        or not targetPlayer.Character
+                    then
+                        return
+                    end
+
+                    local targetPart =
+                        targetPlayer.Character:FindFirstChild(
+                            getgenv().AimlockPart
+                        )
+                        or targetPlayer.Character:FindFirstChild(
+                            "HumanoidRootPart"
+                        )
+
+                    if not targetPart then return end
+
+                    local myHRP =
+                        LocalPlayer.Character
+                        and LocalPlayer.Character:FindFirstChild(
+                            "HumanoidRootPart"
+                        )
+
+                    if not myHRP then return end
+
+                    local targetPos = targetPart.Position
+                    local currentCF =
+                        workspace.CurrentCamera.CFrame
+
+                    local targetCF =
+                        CFrame.new(
+                            currentCF.Position,
+                            targetPos
+                        )
+
+                    workspace.CurrentCamera.CFrame =
+                        currentCF:Lerp(targetCF, 1)
+                end)
+
+        else
+            if aimlockConn then
+                aimlockConn:Disconnect()
+                aimlockConn = nil
+            end
+        end
+    end
+})
+
+-- COMBAT / WEAPON
+
+CombatTab:Section({
+    Title = "Weapon",
+    Icon = "sword"
+})
+
+CombatTab:Button({
+    Title = "Grab Gun",
+    Desc = "วาร์ปไปเก็บปืน",
+
+    Callback = function()
+        local gun = getGunDrop()
+
+        if gun and LocalPlayer.Character then
+            LocalPlayer.Character:PivotTo(gun.CFrame)
+        end
+    end
+})
+
+CombatTab:Toggle({
+    Title = "Auto Grab Gun",
+    Desc = "ออโต้เก็บปืนที่หล่น",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().AGG = v
+
+        if not v then return end
+
+        task.spawn(function()
+            while getgenv().AGG do
+                local gun = getGunDrop()
+                local root = getRoot(LocalPlayer)
+
+                if gun and root and firetouchinterest then
+                    firetouchinterest(root, gun, 0)
+                    firetouchinterest(root, gun, 1)
+                end
+
+                task.wait(0.1)
+            end
+        end)
+    end
+})
+
+CombatTab:Toggle({
+    Title = "Show Shoot Button",
+    Desc = "แสดงปุ่มยิงฆาตกร",
+    Value = false,
+
+    Callback = function(v)
+        ShootGui.Enabled = v
+    end
+})
+
+CombatTab:Dropdown({
+    Title = "Shoot Mode",
+    Desc = "เลือกโหมดยิง",
+
+    Values = {
+        "Wallbang",
+        "Silent Aim"
+    },
+
+    Multi = false,
+    Value = "Wallbang",
+
+    Callback = function(v)
+        getgenv().ShootMode = v
+    end
+})
+
+-- COMBAT / QUICK ACTIONS
+
+CombatTab:Section({
+    Title = "Quick Actions",
+    Icon = "zap"
+})
+
+CombatTab:Toggle({
+    Title = "Show Kill All Button",
+    Desc = "ปุ่มฆ่าทั้งหมด",
+    Value = false,
+
+    Callback = function(v)
+        KillGui.Enabled = v
+    end
+})
+
+CombatTab:Toggle({
+    Title = "Show Throw Button",
+    Desc = "ปุ่มปามีด",
+    Value = false,
+
+    Callback = function(v)
+        ThrowGui.Enabled = v
+    end
+})
+
+
+EspTab:Section({
+    Title = "Player ESP",
+    Icon = "users"
+})
+
+EspTab:Toggle({
+    Title = "ESP Player",
+    Desc = "มองผู้เล่นทุกคน",
+    Value = false,
+
+    Callback = function(Value)
+        getgenv().ESP_ENABLED = Value
+
+        local roleColors = {
+            Murderer = Color3.fromRGB(255, 0, 0),
+            Sheriff = Color3.fromRGB(0, 170, 255),
+            Hero = Color3.fromRGB(255, 255, 0),
+            Innocent = Color3.fromRGB(0, 255, 0),
+            Default = Color3.fromRGB(180, 180, 180),
+        }
+
+        local function clearESP()
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr.Character then
+                    local hl =
+                        plr.Character:FindFirstChild(
+                            "MM2_ROLE_HL"
+                        )
+
+                    if hl then
+                        hl:Destroy()
+                    end
+                end
+            end
+        end
+
+        if Value then
+            task.spawn(function()
+                while getgenv().ESP_ENABLED do
+                    local roles = getRoles()
+
+                    for _, plr in pairs(Players:GetPlayers()) do
+                        if plr ~= LocalPlayer
+                            and plr.Character
+                        then
+
+                            local role =
+                                roles[plr.Name] or "Default"
+
+                            local existing =
+                                plr.Character:FindFirstChild(
+                                    "MM2_ROLE_HL"
+                                )
+
+                            if not existing then
+                                local hl =
+                                    Instance.new("Highlight")
+
+                                hl.Name = "MM2_ROLE_HL"
+                                hl.DepthMode =
+                                    Enum.HighlightDepthMode.AlwaysOnTop
+
+                                hl.FillTransparency = 0.45
+                                hl.OutlineTransparency = 0
+                                hl.Parent = plr.Character
+
+                                existing = hl
+                            end
+
+                            existing.FillColor =
+                                roleColors[role]
+                                or roleColors.Default
+
+                            existing.OutlineColor =
+                                Color3.new(1, 1, 1)
+                        end
+                    end
+
+                    task.wait(0.25)
+                end
+
+                clearESP()
+            end)
+        else
+            clearESP()
+        end
+    end
+})
+
+-- ESP / ROLE
+
+EspTab:Section({
+    Title = "Role ESP",
+    Icon = "target"
+})
+
+local function removeRoleESP(name)
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Character then
+
+            local hl =
+                plr.Character:FindFirstChild(
+                    name .. "_HL"
+                )
+
+            local bill =
+                plr.Character:FindFirstChild(
+                    name .. "_BILL"
+                )
+
+            if hl then
+                hl:Destroy()
+            end
+
+            if bill then
+                bill:Destroy()
+            end
+        end
+    end
+end
+
+local ESPTagFolder = Instance.new("Folder")
+ESPTagFolder.Name = "MM2_ESPTag"
+ESPTagFolder.Parent =
+    (gethui and gethui())
+    or game:GetService("CoreGui")
+
+local tagObjects = {}
+
+local TagColors = {
+    Murderer = Color3.fromRGB(255, 50, 50),
+    Sheriff = Color3.fromRGB(50, 100, 255),
+    Hero = Color3.fromRGB(255, 255, 0),
+    Innocent = Color3.fromRGB(0, 255, 0),
+    Default = Color3.fromRGB(255, 255, 255),
+}
+
+local function GetAvatarImage(userId)
+    local success, result = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            userId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size48x48
+        )
+    end)
+
+    return success and result or ""
+end
+
+local function CreateTag(player)
+    if player == LocalPlayer then return end
+    if tagObjects[player] then return end
+
+    local Billboard = Instance.new("BillboardGui")
+
+    Billboard.Name = "Tag_" .. player.Name
+    Billboard.AlwaysOnTop = true
+    Billboard.Size = UDim2.new(0, 220, 0, 36)
+    Billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    Billboard.LightInfluence = 0
+    Billboard.Parent = ESPTagFolder
+
+    local TagFrame = Instance.new("Frame")
+
+    TagFrame.Parent = Billboard
+    TagFrame.BackgroundColor3 =
+        Color3.fromRGB(20, 20, 20)
+
+    TagFrame.BackgroundTransparency = 0.5
+    TagFrame.AutomaticSize = Enum.AutomaticSize.X
+    TagFrame.Size = UDim2.new(0, 0, 1, 0)
+    TagFrame.Position = UDim2.new(0.5, 0, 0.05, 0)
+    TagFrame.AnchorPoint = Vector2.new(0.5, 0)
+
+    Instance.new("UICorner", TagFrame).CornerRadius =
+        UDim.new(0, 8)
+
+    local Padding = Instance.new("UIPadding", TagFrame)
+
+    Padding.PaddingLeft = UDim.new(0, 6)
+    Padding.PaddingRight = UDim.new(0, 8)
+    Padding.PaddingTop = UDim.new(0, 3)
+    Padding.PaddingBottom = UDim.new(0, 3)
+
+    local ListLayout =
+        Instance.new("UIListLayout", TagFrame)
+
+    ListLayout.FillDirection =
+        Enum.FillDirection.Horizontal
+
+    ListLayout.VerticalAlignment =
+        Enum.VerticalAlignment.Center
+
+    ListLayout.Padding = UDim.new(0, 5)
+    ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local Stroke = Instance.new("UIStroke", TagFrame)
+
+    Stroke.Thickness = 2
+    Stroke.ApplyStrokeMode =
+        Enum.ApplyStrokeMode.Border
+
+    local Gradient = Instance.new("UIGradient", Stroke)
+
+    Gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(
+            0,
+            Color3.fromRGB(180, 0, 255)
+        ),
+
+        ColorSequenceKeypoint.new(
+            1,
+            Color3.fromRGB(80, 0, 150)
+        )
+    }
+
+    local AvatarImage = Instance.new("ImageLabel")
+
+    AvatarImage.Parent = TagFrame
+    AvatarImage.LayoutOrder = 1
+    AvatarImage.BackgroundTransparency = 1
+    AvatarImage.Size = UDim2.new(0, 24, 0, 24)
+    AvatarImage.Image =
+        GetAvatarImage(player.UserId)
+
+    local AvatarCorner =
+        Instance.new("UICorner", AvatarImage)
+
+    AvatarCorner.CornerRadius = UDim.new(1, 0)
+
+    local NameLabel = Instance.new("TextLabel")
+
+    NameLabel.Parent = TagFrame
+    NameLabel.LayoutOrder = 2
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.AutomaticSize = Enum.AutomaticSize.X
+    NameLabel.Size = UDim2.new(0, 0, 1, 0)
+    NameLabel.Font = Enum.Font.GothamBold
+    NameLabel.TextSize = 12
+    NameLabel.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    NameLabel.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    NameLabel.Text = player.Name
+    NameLabel.TextStrokeTransparency = 0.7
+    NameLabel.TextStrokeColor3 =
+        Color3.fromRGB(0, 0, 0)
+
+    tagObjects[player] = {
+        Billboard = Billboard,
+        NameLabel = NameLabel,
+        AvatarImage = AvatarImage,
+    }
+end
+
+local function RemoveTag(player)
+    local data = tagObjects[player]
+
+    if data then
+        if data.Billboard then
+            data.Billboard:Destroy()
+        end
+
+        tagObjects[player] = nil
+    end
+end
+
+local tagConnection = nil
+local tagPlayerAdded = nil
+local tagPlayerRemoving = nil
+local espTagEnabled = false
+
+EspTab:Toggle({
+    Title = "ESP Tagname",
+    Desc = "แสดงชื่อเหนือหัว",
+    Value = false,
+
+    Callback = function(v)
+        espTagEnabled = v
+
+        if v then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                CreateTag(plr)
+            end
+
+            tagConnection =
+                RunService.RenderStepped:Connect(function()
+
+                    if not espTagEnabled then return end
+
+                    local roles = getRoles()
+
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr == LocalPlayer then
+                            continue
+                        end
+
+                        local data = tagObjects[plr]
+
+                        if not data then
+                            CreateTag(plr)
+                            data = tagObjects[plr]
+                        end
+
+                        if not data then
+                            continue
+                        end
+
+                        local char = plr.Character
+                        local head =
+                            char and char:FindFirstChild("Head")
+
+                        local hum =
+                            char and char:FindFirstChildOfClass(
+                                "Humanoid"
+                            )
+
+                        if head and hum and hum.Health > 0 then
+                            data.Billboard.Adornee = head
+                            data.Billboard.Enabled = true
+
+                            local role =
+                                roles[plr.Name]
+
+                            local color = TagColors.Default
+                            local label = plr.Name
+
+                            if role then
+                                color =
+                                    TagColors[role]
+                                    or TagColors.Default
+
+                                label =
+                                    plr.Name ..
+                                    " | " ..
+                                    role
+                            end
+
+                            data.NameLabel.TextColor3 = color
+                            data.NameLabel.Text = label
+                        else
+                            data.Billboard.Enabled = false
+                        end
+                    end
+                end)
+
+            tagPlayerAdded =
+                Players.PlayerAdded:Connect(function(plr)
+                    if espTagEnabled then
+                        task.wait(1)
+
+                        if espTagEnabled then
+                            CreateTag(plr)
+                        end
+                    end
+                end)
+
+            tagPlayerRemoving =
+                Players.PlayerRemoving:Connect(function(plr)
+                    RemoveTag(plr)
+                end)
+
+        else
+            if tagConnection then
+                tagConnection:Disconnect()
+                tagConnection = nil
+            end
+
+            if tagPlayerAdded then
+                tagPlayerAdded:Disconnect()
+                tagPlayerAdded = nil
+            end
+
+            if tagPlayerRemoving then
+                tagPlayerRemoving:Disconnect()
+                tagPlayerRemoving = nil
+            end
+
+            for plr in pairs(tagObjects) do
+                RemoveTag(plr)
+            end
+
+            for _, obj in pairs(
+                ESPTagFolder:GetChildren()
+            ) do
+                obj:Destroy()
+            end
+
+            table.clear(tagObjects)
+        end
+    end
+})
+
+local function createRoleESP(
+    plr,
+    color,
+    text,
+    espName
+)
+    if not plr.Character or plr == LocalPlayer then
+        return
+    end
+
+    local char = plr.Character
+    local head = char:FindFirstChild("Head")
+
+    if not char or not head then
+        return
+    end
+
+    local hl =
+        char:FindFirstChild(
+            espName .. "_HL"
+        )
+
+    if not hl then
+        hl = Instance.new("Highlight")
+
+        hl.Name = espName .. "_HL"
+        hl.DepthMode =
+            Enum.HighlightDepthMode.AlwaysOnTop
+
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0
+        hl.Parent = char
+    end
+
+    hl.FillColor = color
+    hl.OutlineColor = Color3.new(1, 1, 1)
+
+    local bill =
+        char:FindFirstChild(
+            espName .. "_BILL"
+        )
+
+    if not bill then
+        bill = Instance.new("BillboardGui")
+
+        bill.Name = espName .. "_BILL"
+        bill.Size = UDim2.new(0, 100, 0, 22)
+        bill.StudsOffset =
+            Vector3.new(0, 2.5, 0)
+
+        bill.AlwaysOnTop = true
+        bill.Adornee = head
+        bill.Parent = char
+
+        local txt = Instance.new("TextLabel")
+
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextScaled = true
+        txt.Font = Enum.Font.GothamBold
+        txt.TextStrokeTransparency = 0
+        txt.Parent = bill
+    end
+
+    local txt =
+        bill:FindFirstChildOfClass(
+            "TextLabel"
+        )
+
+    txt.Text = text
+    txt.TextColor3 = color
+end
+
+EspTab:Toggle({
+    Title = "ESP Murderer",
+    Desc = "มองฆาตกร",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().MurderESP = v
+
+        if v then
+            task.spawn(function()
+                while getgenv().MurderESP do
+                    local roles = getRoles()
+
+                    for plrName, role in pairs(roles) do
+                        if role == "Murderer" then
+                            local plr =
+                                Players:FindFirstChild(
+                                    plrName
+                                )
+
+                            if plr then
+                                createRoleESP(
+                                    plr,
+                                    Color3.fromRGB(
+                                        255, 0, 0
+                                    ),
+                                    "MURDER",
+                                    "MURDER"
+                                )
+                            end
+                        end
+                    end
+
+                    task.wait(0.3)
+                end
+
+                removeRoleESP("MURDER")
+            end)
+        else
+            removeRoleESP("MURDER")
+        end
+    end
+})
+
+EspTab:Toggle({
+    Title = "ESP Sheriff/Hero",
+    Desc = "มองนายอำเภอ/ฮีโร่",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().SheriffESP = v
+
+        if v then
+            task.spawn(function()
+                while getgenv().SheriffESP do
+                    local roles = getRoles()
+
+                    for plrName, role in pairs(roles) do
+                        if role == "Sheriff"
+                            or role == "Hero"
+                        then
+
+                            local plr =
+                                Players:FindFirstChild(
+                                    plrName
+                                )
+
+                            if plr then
+                                createRoleESP(
+                                    plr,
+                                    Color3.fromRGB(
+                                        0, 170, 255
+                                    ),
+                                    "SHERIFF",
+                                    "SHERIFF"
+                                )
+                            end
+                        end
+                    end
+
+                    task.wait(0.3)
+                end
+
+                removeRoleESP("SHERIFF")
+            end)
+        else
+            removeRoleESP("SHERIFF")
+        end
+    end
+})
+
+-- ESP / ITEMS
+
+EspTab:Section({
+    Title = "Item ESP",
+    Icon = "package"
+})
+
+EspTab:Toggle({
+    Title = "ESP Gun Drop",
+    Desc = "มองปืนที่หล่น",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().GunEsp = v
+
+        local function clearGunESP()
+            local gun = getGunDrop()
+
+            if gun then
+                local hl =
+                    gun:FindFirstChild("Gun_HL")
+
+                local bill =
+                    gun:FindFirstChild("Gun_BILL")
+
+                if hl then
+                    hl:Destroy()
+                end
+
+                if bill then
+                    bill:Destroy()
+                end
+            end
+        end
+
+        if v then
+            task.spawn(function()
+                while getgenv().GunEsp do
+                    local gun = getGunDrop()
+
+                    if gun then
+                        if not gun:FindFirstChild(
+                            "Gun_HL"
+                        ) then
+
+                            local hl =
+                                Instance.new("Highlight")
+
+                            hl.Name = "Gun_HL"
+                            hl.FillColor =
+                                Color3.fromRGB(
+                                    255, 255, 0
+                                )
+
+                            hl.OutlineColor =
+                                Color3.new(1, 1, 1)
+
+                            hl.FillTransparency = 0.35
+
+                            hl.DepthMode =
+                                Enum.HighlightDepthMode.AlwaysOnTop
+
+                            hl.Parent = gun
+                        end
+
+                        if not gun:FindFirstChild(
+                            "Gun_BILL"
+                        ) then
+
+                            local bill =
+                                Instance.new("BillboardGui")
+
+                            bill.Name = "Gun_BILL"
+                            bill.Size =
+                                UDim2.new(
+                                    0, 100, 0, 22
+                                )
+
+                            bill.StudsOffset =
+                                Vector3.new(
+                                    0, 1.5, 0
+                                )
+
+                            bill.AlwaysOnTop = true
+                            bill.Parent = gun
+
+                            local txt =
+                                Instance.new("TextLabel")
+
+                            txt.Size =
+                                UDim2.new(
+                                    1, 0, 1, 0
+                                )
+
+                            txt.BackgroundTransparency = 1
+                            txt.TextScaled = true
+                            txt.Font =
+                                Enum.Font.GothamBold
+
+                            txt.TextStrokeTransparency = 0
+                            txt.Text = "GUN DROP"
+
+                            txt.TextColor3 =
+                                Color3.fromRGB(
+                                    255, 255, 0
+                                )
+
+                            txt.Parent = bill
+                        end
+                    end
+
+                    task.wait(0.5)
+                end
+
+                clearGunESP()
+            end)
+        else
+            clearGunESP()
+        end
+    end
+})
+
+
+LocalTab:Section({
+    Title = "Movement",
+    Icon = "move"
+})
+
+local SpeedEnabled = false
+local SpeedValue = 16
+
+LocalTab:Toggle({
+    Title = "Speed Boost",
+    Desc = "วิ่งเร็ว",
+    Value = false,
+
+    Callback = function(v)
+        SpeedEnabled = v
+
+        local h = getHumanoid(LocalPlayer)
+
+        if h then
+            h.WalkSpeed =
+                v and SpeedValue or 16
+        end
+    end
+})
+
+LocalTab:Slider({
+    Title = "Speed Value",
+    Desc = "ปรับความเร็ว",
+    Step = 1,
+
+    Value = {
+        Min = 16,
+        Max = 1000,
+        Default = 16
+    },
+
+    Callback = function(v)
+        SpeedValue = v
+
+        local h = getHumanoid(LocalPlayer)
+
+        if SpeedEnabled and h then
+            h.WalkSpeed = v
+        end
+    end
+})
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    Root = char:WaitForChild("HumanoidRootPart")
+
+    if SpeedEnabled then
+        local hum =
+            char:WaitForChild("Humanoid")
+
+        hum.WalkSpeed = SpeedValue
+    end
+end)
+
+-- PLAYER / JUMP
+
+LocalTab:Section({
+    Title = "Jump",
+    Icon = "arrow-up"
+})
+
+LocalTab:Slider({
+    Title = "JumpPower",
+    Desc = "การกระโดด",
+    Step = 1,
+
+    Value = {
+        Min = 50,
+        Max = 500,
+        Default = 50
+    },
+
+    Callback = function(v)
+        getgenv().Jumppower = v
+
+        local hum =
+            getHumanoid(LocalPlayer)
+
+        if hum then
+            hum.JumpPower = v
+        end
+    end
+})
+
+LocalTab:Toggle({
+    Title = "Infinite Jump",
+    Desc = "กระโดดไม่จำกัด",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().InfiniteJump = v
+    end
+})
+
+UserInputService.JumpRequest:Connect(function()
+    if getgenv().InfiniteJump then
+        local hum =
+            getHumanoid(LocalPlayer)
+
+        if hum then
+            hum:ChangeState(
+                Enum.HumanoidStateType.Jumping
+            )
+        end
+    end
+end)
+
+-- PLAYER / CHARACTER
+
+LocalTab:Section({
+    Title = "Character",
+    Icon = "user"
+})
+
+LocalTab:Toggle({
+    Title = "Noclip",
+    Desc = "ทะลุกำแพง",
+    Value = false,
+
+    Callback = function(v)
+        getgenv().Noclip = v
+
+        if not v then
+            return
+        end
+
+        task.spawn(function()
+            while getgenv().Noclip do
+                local char = LocalPlayer.Character
+
+                if char then
+                    for _, part in pairs(
+                        char:GetDescendants()
+                    ) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+
+                RunService.Stepped:Wait()
+            end
+        end)
+    end
+})
+
+
+TeleportTab:Section({
+    Title = "Player Teleport",
+    Icon = "users"
+})
+
+local TPSelectedPlayer = nil
+
+local function GetPlayerList()
+    local tbl = {}
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            table.insert(tbl, plr.Name)
+        end
+    end
+
+    return tbl
+end
+
+local PlayerTPDropdown =
+    TeleportTab:Dropdown({
+        Title = "Select Player",
+        Desc = "เลือกผู้เล่น",
+        Values = GetPlayerList(),
+        Multi = false,
+
+        Callback = function(v)
+            TPSelectedPlayer = v
+        end
+    })
+
+Players.PlayerAdded:Connect(function()
+    task.wait(1)
+
+    PlayerTPDropdown:Refresh(
+        GetPlayerList()
+    )
+end)
+
+Players.PlayerRemoving:Connect(function()
+    task.wait()
+
+    PlayerTPDropdown:Refresh(
+        GetPlayerList()
+    )
+end)
+
+TeleportTab:Button({
+    Title = "TP To Player",
+    Desc = "วาร์ปไปหาผู้เล่น",
+
+    Callback = function()
+        local target =
+            Players:FindFirstChild(
+                TPSelectedPlayer
+            )
+
+        if target
+            and target.Character
+            and target.Character:FindFirstChild(
+                "HumanoidRootPart"
+            )
+        then
+
+            LocalPlayer.Character:PivotTo(
+                target.Character.HumanoidRootPart.CFrame
+                + Vector3.new(0, 3, 0)
+            )
+        end
+    end
+})
+
+-- TELEPORT / ROLE
+
+TeleportTab:Section({
+    Title = "Role Teleport",
+    Icon = "target"
+})
+
+TeleportTab:Button({
+    Title = "TP To Murderer",
+    Desc = "วาร์ปไปหาฆาตกร",
+
+    Callback = function()
+        for plr, role in pairs(getRoles()) do
+            if role == "Murderer" then
+
+                local target =
+                    Players:FindFirstChild(plr)
+
+                if target
+                    and target.Character
+                    and target.Character:FindFirstChild(
+                        "HumanoidRootPart"
+                    )
+                then
+
+                    LocalPlayer.Character:PivotTo(
+                        target.Character.HumanoidRootPart.CFrame
+                        + Vector3.new(0, 3, 0)
+                    )
+
+                    break
+                end
+            end
+        end
+    end
+})
+
+TeleportTab:Button({
+    Title = "TP To Sheriff/Hero",
+    Desc = "วาร์ปไปหานายอำเภอ/ฮีโร่",
+
+    Callback = function()
+        for plr, role in pairs(getRoles()) do
+            if role == "Sheriff"
+                or role == "Hero"
+            then
+
+                local target =
+                    Players:FindFirstChild(plr)
+
+                if target
+                    and target.Character
+                    and target.Character:FindFirstChild(
+                        "HumanoidRootPart"
+                    )
+                then
+
+                    LocalPlayer.Character:PivotTo(
+                        target.Character.HumanoidRootPart.CFrame
+                        + Vector3.new(0, 3, 0)
+                    )
+
+                    break
+                end
+            end
+        end
+    end
+})
+
+-- TELEPORT / MAP
+
+TeleportTab:Section({
+    Title = "Map Teleports",
+    Icon = "map"
+})
+
+TeleportTab:Button({
+    Title = "TP To Map",
+    Desc = "วาร์ปไปแมพปัจจุบัน",
+
+    Callback = function()
+        local map =
+            workspace:FindFirstChild(
+                "CoinContainer",
+                true
+            )
+
+        if map and map.Parent then
+            local part =
+                map:FindFirstChildWhichIsA(
+                    "BasePart",
+                    true
+                )
+                or map.Parent:FindFirstChildWhichIsA(
+                    "BasePart",
+                    true
+                )
+
+            if part and Character then
+                Character:PivotTo(
+                    part.CFrame *
+                    CFrame.new(0, 2, 0)
+                )
+            end
+        end
+    end
+})
+
+TeleportTab:Button({
+    Title = "TP To Lobby",
+    Desc = "วาร์ปไปล็อบบี้",
+
+    Callback = function()
+        if Character then
+            Character:PivotTo(
+                CFrame.new(
+                    13.8190517,
+                    504.787109,
+                    -56.5267372,
+                    0.998816371,
+                    2.53511145e-09,
+                    -0.0486397929,
+                    -2.1081259e-09,
+                    1,
+                    8.82982043e-09,
+                    0.0486397929,
+                    -8.71683081e-09,
+                    0.998816371
+                )
+            )
+        end
+    end
+})
+
+
+TabAudio:Section({
+    Title = "Radio",
+    Icon = "radio"
+})
+
+local _musicId = ""
+local _radioMode = "FE Radio"
+
+TabAudio:Input({
+    Title = "Sound ID",
+    Desc = "ใส่ Asset ID เพลง",
+    Placeholder = "เช่น 1045792718",
+
+    Callback = function(v)
+        _musicId =
+            v:gsub("%D", "")
+    end
+})
+
+TabAudio:Dropdown({
+    Title = "Radio Mode",
+    Desc =
+        "FE Radio = ได้ยินทั้ง Server | Local = ได้ยินแค่คนเดียว",
+
+    Values = {
+        "FE Radio",
+        "Local"
+    },
+
+    Multi = false,
+    Value = "FE Radio",
+
+    Callback = function(v)
+        _radioMode = v
+    end
+})
+
+-- MUSIC / LOCAL AUDIO
+
+TabAudio:Section({
+    Title = "Local Audio",
+    Icon = "headphones"
+})
+
+local _localSound = nil
+
+local function stopLocalSound()
+    if _localSound then
+        _localSound:Stop()
+        _localSound:Destroy()
+        _localSound = nil
+    end
+end
+
+local function playLocalSound(id)
+    stopLocalSound()
+
+    local soundParent =
+        workspace.CurrentCamera
+
+    local s = Instance.new("Sound")
+
+    s.Name = "MM2_LocalRadio"
+    s.SoundId = "rbxassetid://" .. id
+    s.Volume = 0.5
+    s.Looped = true
+    s.RollOffMaxDistance = 0
+    s.Parent = soundParent
+
+    s:Play()
+
+    _localSound = s
+end
+
+TabAudio:Slider({
+    Title = "Local Volume",
+    Desc = "ระดับเสียง Local Radio",
+    Step = 5,
+
+    Value = {
+        Min = 0,
+        Max = 100,
+        Default = 50
+    },
+
+    Callback = function(v)
+        if _localSound then
+            _localSound.Volume = v / 100
+        end
+    end
+})
+
+TabAudio:Toggle({
+    Title = "Loop Local Radio",
+    Desc = "วนเพลง Local ซ้ำ",
+    Value = true,
+
+    Callback = function(v)
+        if _localSound then
+            _localSound.Looped = v
+        end
+    end
+})
+
+-- MUSIC / CONTROLS
+
+TabAudio:Section({
+    Title = "Controls",
+    Icon = "sliders"
+})
+
+TabAudio:Button({
+    Title = "Play Radio",
+    Desc = "เล่นเพลงตามโหมดที่เลือก",
+
+    Callback = function()
+        if _musicId == "" then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ใส่ Sound ID ก่อนนะ!",
+                Duration = 2,
+                Icon = "x"
+            })
+
+            return
+        end
+
+        if _radioMode == "FE Radio" then
+            stopLocalSound()
+
+            pcall(function()
+                ReplicatedStorage
+                    :WaitForChild("Remotes")
+                    :WaitForChild("Inventory")
+                    :WaitForChild("PlaySong")
+                    :FireServer(
+                        "https://www.roblox.com/asset/?id="
+                        .. _musicId
+                    )
+            end)
+
+            WindUI:Notify({
+                Title = "FE Radio",
+                Content =
+                    "กำลังเล่น ID: "
+                    .. _musicId,
+                Duration = 3,
+                Icon = "headphones"
+            })
+
+        elseif _radioMode == "Local" then
+            pcall(function()
+                ReplicatedStorage
+                    :WaitForChild("Remotes")
+                    :WaitForChild("Inventory")
+                    :WaitForChild("PlaySong")
+                    :FireServer("")
+            end)
+
+            playLocalSound(_musicId)
+
+            WindUI:Notify({
+                Title = "Local Radio",
+                Content =
+                    "เล่นเฉพาะคุณ ID: "
+                    .. _musicId,
+                Duration = 3,
+                Icon = "headphones"
+            })
+        end
+    end
+})
+
+TabAudio:Button({
+    Title = "Stop Radio",
+    Desc = "หยุดเพลงทุกโหมด",
+
+    Callback = function()
+        stopLocalSound()
+
+        pcall(function()
+            ReplicatedStorage
+                :WaitForChild("Remotes")
+                :WaitForChild("Inventory")
+                :WaitForChild("PlaySong")
+                :FireServer("")
+        end)
+
+        WindUI:Notify({
+            Title = "Radio",
+            Content = "หยุดเพลงแล้ว",
+            Duration = 2,
+            Icon = "square"
+        })
+    end
+})
+
+
+KeybindTab:Section({
+    Title = "Combat Keys",
+    Icon = "swords"
+})
+
+local Keybinds = {
+    Shoot = Enum.KeyCode.E,
+    KillAll = Enum.KeyCode.Q,
+    ThrowKnife = Enum.KeyCode.F,
+    KillSheriff = Enum.KeyCode.R,
+    GrabGun = Enum.KeyCode.G,
+}
+
+KeybindTab:Keybind({
+    Title = "Shoot Murderer",
+    Desc = "ปุ่มยิงฆาตกร",
+    Value = Enum.KeyCode.E,
+
+    Callback = function(key)
+        Keybinds.Shoot = key
+    end
+})
+
+KeybindTab:Keybind({
+    Title = "Kill All",
+    Desc = "ปุ่มฆ่าทุกคน",
+    Value = Enum.KeyCode.Q,
+
+    Callback = function(key)
+        Keybinds.KillAll = key
+    end
+})
+
+KeybindTab:Keybind({
+    Title = "Throw Knife",
+    Desc = "ปุ่มปามีด",
+    Value = Enum.KeyCode.F,
+
+    Callback = function(key)
+        Keybinds.ThrowKnife = key
+    end
+})
+
+KeybindTab:Keybind({
+    Title = "Kill Sheriff/Hero",
+    Desc = "ปุ่มฆ่านายอำเภอ",
+    Value = Enum.KeyCode.R,
+
+    Callback = function(key)
+        Keybinds.KillSheriff = key
+    end
+})
+
+-- KEYBINDS / UTILITY
+
+KeybindTab:Section({
+    Title = "Utility Keys",
+    Icon = "wrench"
+})
+
+KeybindTab:Keybind({
+    Title = "Grab Gun",
+    Desc = "ปุ่มวาร์ปเก็บปืน",
+    Value = Enum.KeyCode.G,
+
+    Callback = function(key)
+        Keybinds.GrabGun = key
+    end
+})
+
+-- แก้ไข Keybind ให้ใช้ getgenv().KillAllEnabled
+UserInputService.InputBegan:Connect(
+    function(input, gameProcessed)
+
+        if gameProcessed then return end
+
+        if input.UserInputType ~=
+            Enum.UserInputType.Keyboard
+        then
+            return
+        end
+
+        local key = input.KeyCode
+
+        if key == Keybinds.Shoot then
+            ShootMurdererAction()
+
+        elseif key == Keybinds.KillAll then
+            getgenv().KillAllEnabled = not getgenv().KillAllEnabled
+            auraEnabled = getgenv().KillAllEnabled
+            print("Kill All: " .. tostring(getgenv().KillAllEnabled))
+
+        elseif key == Keybinds.ThrowKnife then
+            ThrowKnifeAction()
+
+        elseif key == Keybinds.KillSheriff then
+
+            if not Root then return end
+
+            local myChar =
+                LocalPlayer.Character
+
+            if not myChar then return end
+
+            local Knife =
+                myChar:FindFirstChild("Knife")
+
+            if not Knife then
+                local bpKnife =
+                    LocalPlayer.Backpack:FindFirstChild(
+                        "Knife"
+                    )
+
+                if bpKnife then
+                    myChar:FindFirstChildOfClass(
+                        "Humanoid"
+                    ):EquipTool(bpKnife)
+
+                    task.wait(0.15)
+                end
+            end
+
+            for plr, role in pairs(getRoles()) do
+                if role == "Sheriff"
+                    or role == "Hero"
+                then
+
+                    local target =
+                        Players:FindFirstChild(plr)
+
+                    if target
+                        and target ~= LocalPlayer
+                        and target.Character
+                    then
+
+                        local enemyRoot =
+                            target.Character:FindFirstChild(
+                                "HumanoidRootPart"
+                            )
+
+                        if enemyRoot then
+                            enemyRoot.CFrame =
+                                Root.CFrame *
+                                CFrame.new(0, 0, -3)
+
+                            task.spawn(function()
+                                for i = 1, 15 do
+                                    if enemyRoot and Root then
+                                        enemyRoot.CFrame =
+                                            Root.CFrame *
+                                            CFrame.new(
+                                                0,
+                                                0,
+                                                -3
+                                            )
+                                    end
+
+                                    task.wait(0.03)
+                                end
+                            end)
+                        end
+                    end
+                end
+            end
+
+        elseif key == Keybinds.GrabGun then
+            local gun = getGunDrop()
+
+            if gun and LocalPlayer.Character then
+                LocalPlayer.Character:PivotTo(
+                    gun.CFrame
+                )
+            end
+        end
+    end
+)
+
+
+TabSetting:Section({
+    Title = "Audio",
+    Icon = "volume-2"
+})
+
+local soundMuted = false
+
+TabSetting:Button({
+    Title = "Muted Sounds",
+    Desc = "ปิด/เปิดเสียงทั้งหมด",
+
+    Callback = function()
+        soundMuted = not soundMuted
+
+        for _, v in pairs(
+            game:GetDescendants()
+        ) do
+
+            if v:IsA("Sound") then
+                if soundMuted then
+                    v.Volume = 0
+                else
+                    v.Volume = 1
+                end
+            end
+        end
+    end
+})
+
+-- SETTINGS / CHARACTER
+
+TabSetting:Section({
+    Title = "Character",
+    Icon = "user"
+})
+
+TabSetting:Button({
+    Title = "Reload Character",
+    Desc = "รีตัวละคร",
+
+    Callback = function()
+        if LocalPlayer.Character then
+            LocalPlayer.Character:BreakJoints()
+        end
+    end
+})
+
+TabSetting:Button({
+    Title = "Anti AFK",
+    Desc = "กันโดนเตะ",
+
+    Callback = function()
+        local VirtualUser =
+            game:GetService("VirtualUser")
+
+        LocalPlayer.Idled:Connect(function()
+            VirtualUser:Button2Down(
+                Vector2.new(0, 0),
+                workspace.CurrentCamera.CFrame
+            )
+
+            task.wait(1)
+
+            VirtualUser:Button2Up(
+                Vector2.new(0, 0),
+                workspace.CurrentCamera.CFrame
+            )
+        end)
+
+        WindUI:Notify({
+            Title = "Anti AFK",
+            Content = "เปิด Anti AFK แล้ว",
+            Duration = 2,
+            Icon = "check"
+        })
+    end
+})
+
+-- SETTINGS / SERVER
+
+TabSetting:Section({
+    Title = "Server",
+    Icon = "server"
+})
+
+TabSetting:Button({
+    Title = "Rejoin",
+    Desc = "เข้าเซิร์ฟเวอร์ใหม่",
+
+    Callback = function()
+        TeleportService:Teleport(
+            game.PlaceId,
+            LocalPlayer
+        )
+    end
+})
+
+-- แก้ไข RenderStepped Loop ให้ใช้ getgenv().KillAllEnabled
+RS.RenderStepped:Connect(function()
+    if not getgenv().KillAllEnabled then
+        return
+    end
+
+    local tool =
+        LocalPlayer.Character
+        and LocalPlayer.Character:FindFirstChildOfClass(
+            "Tool"
+        )
+
+    if not tool
+        or not tool:FindFirstChild("Handle")
+    then
+        return
+    end
+
+    for _, plr in pairs(
+        Players:GetPlayers()
+    ) do
+
+        if plr ~= LocalPlayer
+            and plr.Character
+        then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                tool:Activate()
+
+                for _, part in pairs(
+                    plr.Character:GetChildren()
+                ) do
+
+                    if part:IsA("BasePart") then
+                        firetouchinterest(
+                            tool.Handle,
+                            part,
+                            0
+                        )
+
+                        firetouchinterest(
+                            tool.Handle,
+                            part,
+                            1
+                        )
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- แก้ไขปุ่ม KillAll UI
+KillButton.MouseButton1Click:Connect(function()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+
+    local Knife = myChar:FindFirstChild("Knife")
+    if not Knife then
+        local bpKnife = LocalPlayer.Backpack:FindFirstChild("Knife")
+        if bpKnife then
+            myChar:FindFirstChildOfClass("Humanoid"):EquipTool(bpKnife)
+            task.wait(0.15)
+            Knife = myChar:FindFirstChild("Knife")
+        end
+    end
+
+    if not Knife or not Knife:FindFirstChild("Handle") then
+        warn("ไม่มีมีด!")
+        return
+    end
+    
+    -- เปิดโหมด Kill All ชั่วคราว
+    local oldState = getgenv().KillAllEnabled
+    getgenv().KillAllEnabled = true
+    auraEnabled = true
+    
+    -- ทำงาน Kill All 1 รอบ
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                Knife:Activate()
+                for _, part in pairs(plr.Character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        firetouchinterest(Knife.Handle, part, 0)
+                        firetouchinterest(Knife.Handle, part, 1)
+                    end
+                end
+            end
+        end
+    end
+    
+    -- กลับไปสถานะเดิม
+    getgenv().KillAllEnabled = oldState
+    auraEnabled = oldState
+
+    KillButton.Text = "KILLED!"
+    task.wait(0.5)
+    KillButton.Text = "KILL ALL"
+end)
+
+-- NOTIFY
+
+WindUI:Notify({
+    Title = "F!exozy Hub X Loaded",
+    Content = "Welcome " .. LocalPlayer.Name,
+    Duration = 5,
+    Icon = "check"
+})

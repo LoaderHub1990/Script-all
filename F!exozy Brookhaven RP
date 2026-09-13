@@ -1,0 +1,918 @@
+--!native
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local Rep = ReplicatedStorage
+
+local playRemote = Rep
+    :WaitForChild("RE")
+    :WaitForChild("PlayerToolEvent")
+
+local toolRemote = Rep
+    :WaitForChild("RE")
+    :WaitForChild("1Too1l")
+
+local function IsHoldingBoombox()
+    local char = LocalPlayer.Character
+
+    if not char then
+        return false
+    end
+
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Tool") and v.Name:lower():find("boom") then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function EquipBoombox()
+    if IsHoldingBoombox() then
+        return
+    end
+
+    pcall(function()
+        toolRemote:InvokeServer(
+            "PickingTools",
+            "Boombox"
+        )
+    end)
+
+    task.wait(0.5)
+end
+
+local function PlayMusic(id)
+    id = tostring(id):gsub("%D", "")
+
+    if id == "" then
+        return
+    end
+
+    EquipBoombox()
+
+    pcall(function()
+        playRemote:FireServer(
+            "ToolMusicText",
+            id,
+            nil,
+            true
+        )
+    end)
+end
+
+local function fetchSongName(idStr)
+    local num = tonumber(
+        idStr:match("^%s*(.-)%s*$")
+    )
+
+    if not num then
+        return nil
+    end
+
+    local success, info = pcall(
+        MarketplaceService.GetProductInfo,
+        MarketplaceService,
+        num
+    )
+
+    if success and info and info.Name then
+        return info.Name
+    end
+
+    return nil
+end
+
+local C = {
+    background = Color3.fromRGB(248, 251, 255),
+    white = Color3.fromRGB(255, 255, 255),
+
+    blue = Color3.fromRGB(20, 105, 220),
+    blueLight = Color3.fromRGB(65, 145, 245),
+    blueDark = Color3.fromRGB(10, 70, 165),
+
+    text = Color3.fromRGB(15, 45, 80),
+    textLight = Color3.fromRGB(80, 110, 140),
+
+    border = Color3.fromRGB(190, 210, 235),
+
+    red = Color3.fromRGB(220, 55, 70),
+    redLight = Color3.fromRGB(255, 240, 242),
+
+    warning = Color3.fromRGB(145, 90, 10),
+    warningBg = Color3.fromRGB(255, 248, 225)
+}
+
+local gui = Instance.new("ScreenGui")
+
+gui.Name = "FExozyHubX"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = PlayerGui
+
+local toggleBtn = Instance.new("TextButton")
+
+toggleBtn.Name = "Toggle"
+toggleBtn.Size = UDim2.fromOffset(46, 46)
+toggleBtn.Position = UDim2.new(0, 16, 0.5, -23)
+
+toggleBtn.BackgroundColor3 = C.blue
+toggleBtn.BorderSizePixel = 0
+
+toggleBtn.Text = "F!"
+toggleBtn.TextColor3 = C.white
+toggleBtn.TextSize = 15
+toggleBtn.Font = Enum.Font.GothamBlack
+
+toggleBtn.AutoButtonColor = false
+toggleBtn.Active = true
+toggleBtn.Draggable = true
+toggleBtn.ZIndex = 20
+toggleBtn.Parent = gui
+
+Instance.new(
+    "UICorner",
+    toggleBtn
+).CornerRadius = UDim.new(1, 0)
+
+local toggleStroke = Instance.new(
+    "UIStroke",
+    toggleBtn
+)
+
+toggleStroke.Thickness = 2
+toggleStroke.Color = C.blueLight
+
+local frame = Instance.new("Frame")
+
+frame.Name = "MainFrame"
+frame.Size = UDim2.fromOffset(340, 315)
+frame.Position = UDim2.new(0.5, -170, 0.5, -157)
+
+frame.BackgroundColor3 = C.background
+frame.BorderSizePixel = 0
+
+frame.Active = true
+frame.ClipsDescendants = true
+frame.Parent = gui
+
+Instance.new(
+    "UICorner",
+    frame
+).CornerRadius = UDim.new(0, 16)
+
+local frameStroke = Instance.new(
+    "UIStroke",
+    frame
+)
+
+frameStroke.Thickness = 1.5
+frameStroke.Color = C.blue
+
+local titleBar = Instance.new("Frame")
+
+titleBar.Size = UDim2.new(1, 0, 0, 58)
+
+titleBar.BackgroundColor3 = C.white
+titleBar.BorderSizePixel = 0
+
+titleBar.ZIndex = 3
+titleBar.Parent = frame
+
+Instance.new(
+    "UICorner",
+    titleBar
+).CornerRadius = UDim.new(0, 16)
+
+local title = Instance.new("TextLabel")
+
+title.Size = UDim2.new(1, -70, 0, 25)
+title.Position = UDim2.new(0, 18, 0, 8)
+
+title.BackgroundTransparency = 1
+
+title.Text = "F!exozy Hub X"
+title.TextColor3 = C.text
+
+title.TextSize = 17
+title.Font = Enum.Font.GothamBold
+
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+title.ZIndex = 5
+title.Parent = titleBar
+
+local subtitle = Instance.new("TextLabel")
+
+subtitle.Size = UDim2.new(1, -70, 0, 16)
+subtitle.Position = UDim2.new(0, 19, 0, 32)
+
+subtitle.BackgroundTransparency = 1
+
+subtitle.Text = "BOOMBOX MUSIC PLAYER"
+
+subtitle.TextColor3 = C.textLight
+subtitle.TextSize = 8
+subtitle.Font = Enum.Font.GothamBold
+
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+
+subtitle.ZIndex = 5
+subtitle.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+
+closeBtn.Size = UDim2.fromOffset(30, 30)
+closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
+
+closeBtn.BackgroundColor3 = C.white
+closeBtn.BorderSizePixel = 0
+
+closeBtn.Text = "×"
+closeBtn.TextColor3 = C.textLight
+closeBtn.TextSize = 20
+closeBtn.Font = Enum.Font.GothamBold
+
+closeBtn.AutoButtonColor = false
+
+closeBtn.ZIndex = 6
+closeBtn.Parent = titleBar
+
+Instance.new(
+    "UICorner",
+    closeBtn
+).CornerRadius = UDim.new(0, 8)
+
+local closeStroke = Instance.new(
+    "UIStroke",
+    closeBtn
+)
+
+closeStroke.Thickness = 1
+closeStroke.Color = C.border
+
+local songBg = Instance.new("Frame")
+
+songBg.Size = UDim2.new(1, -28, 0, 40)
+songBg.Position = UDim2.new(0, 14, 0, 70)
+
+songBg.BackgroundColor3 = C.white
+songBg.BorderSizePixel = 0
+
+songBg.ZIndex = 3
+songBg.Parent = frame
+
+Instance.new(
+    "UICorner",
+    songBg
+).CornerRadius = UDim.new(0, 10)
+
+local songStroke = Instance.new(
+    "UIStroke",
+    songBg
+)
+
+songStroke.Thickness = 1
+songStroke.Color = C.border
+
+local noteIcon = Instance.new("TextLabel")
+
+noteIcon.Size = UDim2.fromOffset(34, 40)
+noteIcon.Position = UDim2.new(0, 8, 0, 0)
+
+noteIcon.BackgroundTransparency = 1
+
+noteIcon.Text = "♪"
+noteIcon.TextColor3 = C.blue
+noteIcon.TextSize = 19
+noteIcon.Font = Enum.Font.GothamBold
+
+noteIcon.ZIndex = 5
+noteIcon.Parent = songBg
+
+local songLabel = Instance.new("TextLabel")
+
+songLabel.Size = UDim2.new(1, -52, 1, 0)
+songLabel.Position = UDim2.new(0, 42, 0, 0)
+
+songLabel.BackgroundTransparency = 1
+
+songLabel.Text = "รอใส่ไอดีเพลง"
+
+songLabel.TextColor3 = C.textLight
+songLabel.TextSize = 12
+songLabel.Font = Enum.Font.Gotham
+
+songLabel.TextXAlignment = Enum.TextXAlignment.Left
+songLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+songLabel.ZIndex = 5
+songLabel.Parent = songBg
+
+local timerBg = Instance.new("Frame")
+
+timerBg.Size = UDim2.new(1, -28, 0, 28)
+timerBg.Position = UDim2.new(0, 14, 0, 119)
+
+timerBg.BackgroundColor3 = Color3.fromRGB(232, 240, 250)
+timerBg.BorderSizePixel = 0
+
+timerBg.ClipsDescendants = true
+timerBg.ZIndex = 3
+timerBg.Parent = frame
+
+Instance.new(
+    "UICorner",
+    timerBg
+).CornerRadius = UDim.new(0, 8)
+
+local timerStroke = Instance.new(
+    "UIStroke",
+    timerBg
+)
+
+timerStroke.Thickness = 1
+timerStroke.Color = C.border
+
+local progressBg = Instance.new("Frame")
+
+progressBg.Size = UDim2.new(0, 0, 1, 0)
+
+progressBg.BackgroundColor3 = C.blue
+progressBg.BorderSizePixel = 0
+
+progressBg.ZIndex = 4
+progressBg.Parent = timerBg
+
+Instance.new(
+    "UICorner",
+    progressBg
+).CornerRadius = UDim.new(0, 8)
+
+local timerLabel = Instance.new("TextLabel")
+
+timerLabel.Size = UDim2.new(1, 0, 1, 0)
+
+timerLabel.BackgroundTransparency = 1
+
+timerLabel.Text = "00:00"
+
+timerLabel.TextColor3 = C.text
+timerLabel.TextSize = 12
+timerLabel.Font = Enum.Font.Code
+
+timerLabel.ZIndex = 6
+timerLabel.Parent = timerBg
+
+local warningLabel = Instance.new("TextLabel")
+
+warningLabel.Size = UDim2.new(1, -28, 0, 22)
+warningLabel.Position = UDim2.new(0, 14, 0, 153)
+
+warningLabel.BackgroundColor3 = C.warningBg
+warningLabel.BorderSizePixel = 0
+
+warningLabel.Text = "⚠  ต้องมี Game Pass ก่อนถึงจะใช้ได้"
+warningLabel.TextColor3 = C.warning
+warningLabel.TextSize = 9
+warningLabel.Font = Enum.Font.GothamBold
+
+warningLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+warningLabel.ZIndex = 3
+warningLabel.Parent = frame
+
+Instance.new(
+    "UICorner",
+    warningLabel
+).CornerRadius = UDim.new(0, 7)
+
+local inputBg = Instance.new("Frame")
+
+inputBg.Size = UDim2.new(1, -28, 0, 39)
+inputBg.Position = UDim2.new(0, 14, 0, 183)
+
+inputBg.BackgroundColor3 = C.white
+inputBg.BorderSizePixel = 0
+
+inputBg.ZIndex = 3
+inputBg.Parent = frame
+
+Instance.new(
+    "UICorner",
+    inputBg
+).CornerRadius = UDim.new(0, 10)
+
+local inputStroke = Instance.new(
+    "UIStroke",
+    inputBg
+)
+
+inputStroke.Thickness = 1.5
+inputStroke.Color = C.border
+
+local inputBox = Instance.new("TextBox")
+
+inputBox.Size = UDim2.new(1, -20, 1, 0)
+inputBox.Position = UDim2.new(0, 10, 0, 0)
+
+inputBox.BackgroundTransparency = 1
+
+inputBox.Text = ""
+inputBox.PlaceholderText = "วางไอดีเพลงที่นี่..."
+inputBox.PlaceholderColor3 = C.textLight
+
+inputBox.TextColor3 = C.text
+inputBox.TextSize = 13
+inputBox.Font = Enum.Font.Code
+
+inputBox.ClearTextOnFocus = false
+inputBox.TextXAlignment = Enum.TextXAlignment.Left
+
+inputBox.ZIndex = 5
+inputBox.Parent = inputBg
+
+local playBtn = Instance.new("TextButton")
+
+playBtn.Size = UDim2.new(1, -28, 0, 42)
+playBtn.Position = UDim2.new(0, 14, 0, 232)
+
+playBtn.BackgroundColor3 = C.blue
+playBtn.BorderSizePixel = 0
+
+playBtn.Text = "▶  PLAY"
+
+playBtn.TextColor3 = C.white
+playBtn.TextSize = 14
+playBtn.Font = Enum.Font.GothamBold
+
+playBtn.AutoButtonColor = false
+
+playBtn.ZIndex = 3
+playBtn.Parent = frame
+
+Instance.new(
+    "UICorner",
+    playBtn
+).CornerRadius = UDim.new(0, 10)
+
+local playStroke = Instance.new(
+    "UIStroke",
+    playBtn
+)
+
+playStroke.Thickness = 1
+playStroke.Color = C.blueLight
+
+local isPlaying = false
+local playStartTick = 0
+local timerConn = nil
+local pulseConn = nil
+local currentId = ""
+local uiOpen = true
+
+local function tween(obj, props, duration, style, direction)
+    TweenService:Create(
+        obj,
+        TweenInfo.new(
+            duration or 0.2,
+            style or Enum.EasingStyle.Quad,
+            direction or Enum.EasingDirection.Out
+        ),
+        props
+    ):Play()
+end
+
+local function startPulse()
+    if pulseConn then
+        pulseConn:Disconnect()
+    end
+
+    local t = 0
+
+    pulseConn = RunService.Heartbeat:Connect(function(dt)
+        t += dt
+
+        noteIcon.TextTransparency =
+            0.05 + math.abs(math.sin(t * 3)) * 0.25
+
+        if math.floor(t * 2) % 2 == 0 then
+            noteIcon.Text = "♪"
+        else
+            noteIcon.Text = "♫"
+        end
+    end)
+end
+
+local function stopPulse()
+    if pulseConn then
+        pulseConn:Disconnect()
+        pulseConn = nil
+    end
+
+    noteIcon.Text = "♪"
+    noteIcon.TextTransparency = 0
+end
+
+local function formatTime(seconds)
+    local minutes = math.floor(seconds / 60)
+    local secs = math.floor(seconds % 60)
+
+    return string.format(
+        "%02d:%02d",
+        minutes,
+        secs
+    )
+end
+
+local function startTimer()
+    playStartTick = tick()
+
+    if timerConn then
+        timerConn:Disconnect()
+    end
+
+    timerConn = RunService.Heartbeat:Connect(function()
+        local elapsed = tick() - playStartTick
+
+        timerLabel.Text = formatTime(elapsed)
+
+        local percent = math.min(
+            elapsed / 300,
+            1
+        )
+
+        progressBg.Size = UDim2.new(
+            percent,
+            0,
+            1,
+            0
+        )
+    end)
+end
+
+local function stopTimer()
+    if timerConn then
+        timerConn:Disconnect()
+        timerConn = nil
+    end
+
+    timerLabel.Text = "00:00"
+
+    progressBg.Size = UDim2.new(
+        0,
+        0,
+        1,
+        0
+    )
+end
+
+local function setPlaying(enabled, songName)
+    isPlaying = enabled
+
+    if enabled then
+        playBtn.Text = "■  หยุดเพลง"
+
+        songLabel.Text = songName or "กำลังโหลด..."
+        songLabel.TextColor3 = C.text
+
+        startPulse()
+        startTimer()
+
+        tween(
+            songStroke,
+            {
+                Color = C.blue
+            },
+            0.2
+        )
+    else
+        playBtn.Text = "▶  PLAY"
+
+        songLabel.Text = "หยุดเพลง"
+        songLabel.TextColor3 = C.textLight
+
+        stopPulse()
+        stopTimer()
+
+        tween(
+            songStroke,
+            {
+                Color = C.border
+            },
+            0.2
+        )
+    end
+end
+
+inputBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local raw = inputBox.Text:gsub("%D", "")
+
+    if #raw > 3 then
+        tween(
+            inputStroke,
+            {
+                Color = C.blue
+            },
+            0.15
+        )
+
+        songLabel.Text = "กำลังโหลดชื่อ..."
+        songLabel.TextColor3 = C.textLight
+
+        task.spawn(function()
+            local name = fetchSongName(raw)
+
+            if name then
+                songLabel.Text = name
+                songLabel.TextColor3 = C.text
+            else
+                songLabel.Text = "ไม่พบชื่อเพลง"
+                songLabel.TextColor3 = C.textLight
+            end
+        end)
+    else
+        tween(
+            inputStroke,
+            {
+                Color = C.border
+            },
+            0.15
+        )
+
+        songLabel.Text = "รอใส่ไอดีเพลง"
+        songLabel.TextColor3 = C.textLight
+    end
+end)
+
+inputBox.Focused:Connect(function()
+    tween(
+        inputStroke,
+        {
+            Color = C.blue
+        },
+        0.15
+    )
+end)
+
+inputBox.FocusLost:Connect(function()
+    tween(
+        inputStroke,
+        {
+            Color = C.border
+        },
+        0.15
+    )
+end)
+
+playBtn.MouseButton1Click:Connect(function()
+    if isPlaying then
+        pcall(function()
+            playRemote:FireServer(
+                "ToolMusicText",
+                "",
+                nil,
+                true
+            )
+        end)
+
+        setPlaying(false)
+        currentId = ""
+
+        return
+    end
+
+    local rawId = inputBox.Text:gsub("%D", "")
+
+    if rawId == "" then
+        tween(
+            inputStroke,
+            {
+                Color = C.red
+            },
+            0.1
+        )
+
+        task.wait(0.5)
+
+        tween(
+            inputStroke,
+            {
+                Color = C.border
+            },
+            0.2
+        )
+
+        return
+    end
+
+    currentId = rawId
+    playBtn.Text = "⏳  LOADING..."
+
+    task.spawn(function()
+        local name = fetchSongName(rawId)
+
+        PlayMusic(rawId)
+
+        setPlaying(
+            true,
+            name or rawId
+        )
+    end)
+end)
+
+playBtn.MouseEnter:Connect(function()
+    if not isPlaying then
+        tween(
+            playBtn,
+            {
+                BackgroundColor3 = C.blueLight
+            },
+            0.15
+        )
+    end
+end)
+
+playBtn.MouseLeave:Connect(function()
+    if not isPlaying then
+        tween(
+            playBtn,
+            {
+                BackgroundColor3 = C.blue
+            },
+            0.15
+        )
+    end
+end)
+
+closeBtn.MouseEnter:Connect(function()
+    tween(
+        closeBtn,
+        {
+            BackgroundColor3 = C.redLight,
+            TextColor3 = C.red
+        },
+        0.12
+    )
+end)
+
+closeBtn.MouseLeave:Connect(function()
+    tween(
+        closeBtn,
+        {
+            BackgroundColor3 = C.white,
+            TextColor3 = C.textLight
+        },
+        0.12
+    )
+end)
+
+local function setUIOpen(open)
+    uiOpen = open
+
+    if open then
+        frame.Visible = true
+
+        frame.Size = UDim2.fromOffset(0, 0)
+
+        frame.Position = UDim2.new(
+            0.5,
+            0,
+            0.5,
+            0
+        )
+
+        tween(
+            frame,
+            {
+                Size = UDim2.fromOffset(
+                    340,
+                    315
+                ),
+
+                Position = UDim2.new(
+                    0.5,
+                    -170,
+                    0.5,
+                    -157
+                )
+            },
+            0.35,
+            Enum.EasingStyle.Back,
+            Enum.EasingDirection.Out
+        )
+    else
+        tween(
+            frame,
+            {
+                Size = UDim2.fromOffset(
+                    0,
+                    0
+                ),
+
+                Position = UDim2.new(
+                    0.5,
+                    0,
+                    0.5,
+                    0
+                )
+            },
+            0.25,
+            Enum.EasingStyle.Back,
+            Enum.EasingDirection.In
+        )
+
+        task.delay(0.27, function()
+            if not uiOpen then
+                frame.Visible = false
+            end
+        end)
+    end
+end
+
+toggleBtn.MouseButton1Click:Connect(function()
+    setUIOpen(not uiOpen)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    setUIOpen(false)
+end)
+
+local dragging = false
+local dragStart
+local frameStart
+
+titleBar.InputBegan:Connect(function(input)
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+    then
+        dragging = true
+        dragStart = input.Position
+        frameStart = frame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if
+        dragging
+        and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        )
+    then
+        local delta = input.Position - dragStart
+
+        frame.Position = UDim2.new(
+            frameStart.X.Scale,
+            frameStart.X.Offset + delta.X,
+            frameStart.Y.Scale,
+            frameStart.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+    then
+        dragging = false
+    end
+end)
+
+local colorTime = 0
+
+RunService.Heartbeat:Connect(function(dt)
+    colorTime += dt
+
+    local wave = (math.sin(colorTime * 1.5) + 1) / 2
+
+    local animatedBlue = C.blue:Lerp(
+        C.blueLight,
+        wave
+    )
+
+    frameStroke.Color = animatedBlue
+    toggleStroke.Color = animatedBlue
+    playStroke.Color = animatedBlue
+
+    noteIcon.TextColor3 = animatedBlue
+end)
+
+frame.Visible = false
+
+task.delay(0.2, function()
+    setUIOpen(true)
+end)
+
+print("[F!EXOZY HUB X] พร้อมใช้งาน")

@@ -1,0 +1,604 @@
+--!native
+
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local HouseEvent = ReplicatedStorage:WaitForChild("House")
+
+local ICO = {
+    float  = "rbxassetid://71098406459023",
+    glow   = "rbxassetid://5028857084",
+    farm   = "rbxassetid://7185431419",
+    afk    = "rbxassetid://1083501284",
+    header = "rbxassetid://8498174594",
+}
+
+local AutoSell = false
+local LoopConnection = nil
+local AntiAfk = false
+local AntiAfkConnection = nil
+
+local BLUE = Color3.fromRGB(55, 170, 255)
+local LIGHT_BLUE = Color3.fromRGB(185, 235, 255)
+local WHITE = Color3.fromRGB(255, 255, 255)
+
+local BACKGROUND = Color3.fromRGB(6, 14, 24)
+local PANEL = Color3.fromRGB(10, 24, 40)
+local ROW = Color3.fromRGB(13, 30, 48)
+
+local TEXT = Color3.fromRGB(235, 248, 255)
+local SUBTEXT = Color3.fromRGB(145, 185, 210)
+
+local GREEN = Color3.fromRGB(55, 215, 125)
+local RED = Color3.fromRGB(255, 100, 100)
+
+local function AddCorner(Object, Radius)
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, Radius)
+    Corner.Parent = Object
+    return Corner
+end
+
+local function AddStroke(Object, Color, Thickness, Transparency)
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color
+    Stroke.Thickness = Thickness or 1
+    Stroke.Transparency = Transparency or 0
+    Stroke.Parent = Object
+    return Stroke
+end
+
+local function Tween(Object, Time, Properties)
+    return TweenService:Create(
+        Object,
+        TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        Properties
+    )
+end
+
+local function CreateGradient(Object)
+    local Gradient = Instance.new("UIGradient")
+    Gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.25, Color3.fromRGB(185, 235, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(55, 170, 255)),
+        ColorSequenceKeypoint.new(0.75, Color3.fromRGB(105, 215, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+    })
+    Gradient.Rotation = 0
+    Gradient.Parent = Object
+    task.spawn(function()
+        local Offset = 0
+        while Gradient.Parent do
+            Offset += 0.006
+            if Offset >= 1 then Offset = 0 end
+            Gradient.Offset = Vector2.new(Offset, 0)
+            task.wait()
+        end
+    end)
+    return Gradient
+end
+
+local GUI = Instance.new("ScreenGui")
+GUI.Name = "F!exozyHubX"
+GUI.ResetOnSpawn = false
+GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+GUI.Parent = PlayerGui
+
+local function MakeDraggable(Object)
+    local Dragging = false
+    local DragInput
+    local DragStart
+    local StartPosition
+
+    Object.InputBegan:Connect(function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseButton1
+            or Input.UserInputType == Enum.UserInputType.Touch then
+            Dragging = true
+            DragStart = Input.Position
+            StartPosition = Object.Position
+            Input.Changed:Connect(function()
+                if Input.UserInputState == Enum.UserInputState.End then
+                    Dragging = false
+                end
+            end)
+        end
+    end)
+
+    Object.InputChanged:Connect(function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseMovement
+            or Input.UserInputType == Enum.UserInputType.Touch then
+            DragInput = Input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(Input)
+        if Input == DragInput and Dragging then
+            local Delta = Input.Position - DragStart
+            Object.Position = UDim2.new(
+                StartPosition.X.Scale,
+                StartPosition.X.Offset + Delta.X,
+                StartPosition.Y.Scale,
+                StartPosition.Y.Offset + Delta.Y
+            )
+        end
+    end)
+end
+
+local FloatButton = Instance.new("TextButton")
+FloatButton.Name = "FloatButton"
+FloatButton.Size = UDim2.fromOffset(56, 56)
+FloatButton.Position = UDim2.new(0.5, -28, 0.5, -28)
+FloatButton.BackgroundColor3 = BACKGROUND
+FloatButton.BorderSizePixel = 0
+FloatButton.Text = ""
+FloatButton.AutoButtonColor = false
+FloatButton.ZIndex = 20
+FloatButton.Parent = GUI
+
+AddCorner(FloatButton, 100)
+AddStroke(FloatButton, LIGHT_BLUE, 2)
+CreateGradient(FloatButton)
+
+local FloatLogo = Instance.new("ImageLabel")
+FloatLogo.Name = "FloatLogo"
+FloatLogo.Size = UDim2.new(1, -12, 1, -12)
+FloatLogo.Position = UDim2.fromOffset(6, 6)
+FloatLogo.BackgroundTransparency = 1
+FloatLogo.Image = ICO.float
+FloatLogo.ImageColor3 = WHITE
+FloatLogo.ZIndex = 22
+FloatLogo.Parent = FloatButton
+
+AddCorner(FloatLogo, 100)
+MakeDraggable(FloatButton)
+
+local GlowRing = Instance.new("ImageLabel")
+GlowRing.Name = "GlowRing"
+GlowRing.Size = UDim2.new(1, 28, 1, 28)
+GlowRing.Position = UDim2.new(0, -14, 0, -14)
+GlowRing.BackgroundTransparency = 1
+GlowRing.Image = ICO.glow
+GlowRing.ImageColor3 = BLUE
+GlowRing.ImageTransparency = 0.45
+GlowRing.ZIndex = 19
+GlowRing.Parent = FloatButton
+
+task.spawn(function()
+    while GlowRing.Parent do
+        Tween(GlowRing, 1.1, { ImageTransparency = 0.78 }):Play()
+        task.wait(1.1)
+        Tween(GlowRing, 1.1, { ImageTransparency = 0.35 }):Play()
+        task.wait(1.1)
+    end
+end)
+
+local Window = Instance.new("Frame")
+Window.Name = "MainWindow"
+Window.Size = UDim2.fromOffset(340, 430)
+Window.Position = UDim2.new(0.5, -170, 0.5, -215)
+Window.BackgroundColor3 = BACKGROUND
+Window.BorderSizePixel = 0
+Window.Visible = false
+Window.ZIndex = 5
+Window.Parent = GUI
+
+AddCorner(Window, 18)
+AddStroke(Window, BLUE, 1.5, 0.2)
+
+local WindowGradient = Instance.new("UIGradient")
+WindowGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(7, 20, 34)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 32, 52)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 14, 25)),
+})
+WindowGradient.Rotation = 135
+WindowGradient.Parent = Window
+
+MakeDraggable(Window)
+
+FloatButton.MouseButton1Click:Connect(function()
+    Window.Visible = not Window.Visible
+end)
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, -20, 0, 60)
+Header.Position = UDim2.fromOffset(10, 10)
+Header.BackgroundColor3 = PANEL
+Header.BorderSizePixel = 0
+Header.ZIndex = 6
+Header.Parent = Window
+
+AddCorner(Header, 13)
+AddStroke(Header, BLUE, 1, 0.35)
+CreateGradient(Header)
+
+local Logo = Instance.new("ImageLabel")
+Logo.Name = "Logo"
+Logo.Size = UDim2.fromOffset(42, 42)
+Logo.Position = UDim2.fromOffset(9, 9)
+Logo.BackgroundColor3 = BACKGROUND
+Logo.BorderSizePixel = 0
+Logo.Image = ICO.header
+Logo.ImageColor3 = WHITE
+Logo.ZIndex = 8
+Logo.Parent = Header
+
+AddCorner(Logo, 11)
+AddStroke(Logo, LIGHT_BLUE, 1)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -70, 0, 24)
+Title.Position = UDim2.fromOffset(60, 9)
+Title.BackgroundTransparency = 1
+Title.Text = "F!exozy Hub X"
+Title.TextColor3 = WHITE
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 8
+Title.Parent = Header
+
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.new(1, -70, 0, 18)
+Subtitle.Position = UDim2.fromOffset(60, 33)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "Auto Sell • Anti AFK"
+Subtitle.TextColor3 = LIGHT_BLUE
+Subtitle.TextSize = 9
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+Subtitle.ZIndex = 8
+Subtitle.Parent = Header
+
+local Status = Instance.new("Frame")
+Status.Size = UDim2.new(1, -20, 0, 32)
+Status.Position = UDim2.fromOffset(10, 78)
+Status.BackgroundColor3 = PANEL
+Status.BorderSizePixel = 0
+Status.ZIndex = 6
+Status.Parent = Window
+
+AddCorner(Status, 9)
+AddStroke(Status, BLUE, 1, 0.55)
+
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.fromOffset(8, 8)
+StatusDot.Position = UDim2.new(0, 11, 0.5, -4)
+StatusDot.BackgroundColor3 = Color3.fromRGB(75, 100, 120)
+StatusDot.BorderSizePixel = 0
+StatusDot.ZIndex = 8
+StatusDot.Parent = Status
+
+AddCorner(StatusDot, 100)
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(1, -35, 1, 0)
+StatusText.Position = UDim2.fromOffset(30, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "IDLE"
+StatusText.TextColor3 = SUBTEXT
+StatusText.TextSize = 10
+StatusText.Font = Enum.Font.GothamBold
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.ZIndex = 8
+StatusText.Parent = Status
+
+local Card = Instance.new("Frame")
+Card.Size = UDim2.new(1, -20, 0, 76)
+Card.Position = UDim2.fromOffset(10, 120)
+Card.BackgroundColor3 = ROW
+Card.BorderSizePixel = 0
+Card.ZIndex = 6
+Card.Parent = Window
+
+AddCorner(Card, 13)
+AddStroke(Card, BLUE, 1, 0.45)
+
+local CardIcon = Instance.new("ImageLabel")
+CardIcon.Name = "CardIcon"
+CardIcon.Size = UDim2.fromOffset(42, 42)
+CardIcon.Position = UDim2.fromOffset(10, 17)
+CardIcon.BackgroundColor3 = Color3.fromRGB(20, 55, 82)
+CardIcon.BorderSizePixel = 0
+CardIcon.Image = ICO.farm
+CardIcon.ImageColor3 = WHITE
+CardIcon.ZIndex = 8
+CardIcon.Parent = Card
+
+AddCorner(CardIcon, 11)
+AddStroke(CardIcon, LIGHT_BLUE, 1, 0.5)
+
+local CardTitle = Instance.new("TextLabel")
+CardTitle.Size = UDim2.new(1, -135, 0, 22)
+CardTitle.Position = UDim2.fromOffset(62, 12)
+CardTitle.BackgroundTransparency = 1
+CardTitle.Text = "Auto Sell"
+CardTitle.TextColor3 = TEXT
+CardTitle.TextSize = 12
+CardTitle.Font = Enum.Font.GothamBold
+CardTitle.TextXAlignment = Enum.TextXAlignment.Left
+CardTitle.ZIndex = 8
+CardTitle.Parent = Card
+
+local CardDescription = Instance.new("TextLabel")
+CardDescription.Size = UDim2.new(1, -135, 0, 18)
+CardDescription.Position = UDim2.fromOffset(62, 35)
+CardDescription.BackgroundTransparency = 1
+CardDescription.Text = "เก็บเงินอัตโนมัติ"
+CardDescription.TextColor3 = SUBTEXT
+CardDescription.TextSize = 9
+CardDescription.Font = Enum.Font.Gotham
+CardDescription.TextXAlignment = Enum.TextXAlignment.Left
+CardDescription.ZIndex = 8
+CardDescription.Parent = Card
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.fromOffset(72, 34)
+Toggle.Position = UDim2.new(1, -82, 0.5, -17)
+Toggle.BackgroundColor3 = Color3.fromRGB(25, 55, 78)
+Toggle.BorderSizePixel = 0
+Toggle.Text = "OFF"
+Toggle.TextColor3 = SUBTEXT
+Toggle.TextSize = 10
+Toggle.Font = Enum.Font.GothamBold
+Toggle.AutoButtonColor = false
+Toggle.ZIndex = 8
+Toggle.Parent = Card
+
+AddCorner(Toggle, 10)
+
+local AfkCard = Instance.new("Frame")
+AfkCard.Size = UDim2.new(1, -20, 0, 76)
+AfkCard.Position = UDim2.fromOffset(10, 205)
+AfkCard.BackgroundColor3 = ROW
+AfkCard.BorderSizePixel = 0
+AfkCard.ZIndex = 6
+AfkCard.Parent = Window
+
+AddCorner(AfkCard, 13)
+AddStroke(AfkCard, BLUE, 1, 0.45)
+
+local AfkIcon = Instance.new("ImageLabel")
+AfkIcon.Name = "AfkIcon"
+AfkIcon.Size = UDim2.fromOffset(42, 42)
+AfkIcon.Position = UDim2.fromOffset(10, 17)
+AfkIcon.BackgroundColor3 = Color3.fromRGB(20, 55, 82)
+AfkIcon.BorderSizePixel = 0
+AfkIcon.Image = ICO.afk
+AfkIcon.ImageColor3 = WHITE
+AfkIcon.ZIndex = 8
+AfkIcon.Parent = AfkCard
+
+AddCorner(AfkIcon, 11)
+AddStroke(AfkIcon, LIGHT_BLUE, 1, 0.5)
+
+local AfkTitle = Instance.new("TextLabel")
+AfkTitle.Size = UDim2.new(1, -135, 0, 22)
+AfkTitle.Position = UDim2.fromOffset(62, 12)
+AfkTitle.BackgroundTransparency = 1
+AfkTitle.Text = "Anti AFK"
+AfkTitle.TextColor3 = TEXT
+AfkTitle.TextSize = 12
+AfkTitle.Font = Enum.Font.GothamBold
+AfkTitle.TextXAlignment = Enum.TextXAlignment.Left
+AfkTitle.ZIndex = 8
+AfkTitle.Parent = AfkCard
+
+local AfkDescription = Instance.new("TextLabel")
+AfkDescription.Size = UDim2.new(1, -135, 0, 18)
+AfkDescription.Position = UDim2.fromOffset(62, 35)
+AfkDescription.BackgroundTransparency = 1
+AfkDescription.Text = "กันหลุดอัตโนมัติ"
+AfkDescription.TextColor3 = SUBTEXT
+AfkDescription.TextSize = 9
+AfkDescription.Font = Enum.Font.Gotham
+AfkDescription.TextXAlignment = Enum.TextXAlignment.Left
+AfkDescription.ZIndex = 8
+AfkDescription.Parent = AfkCard
+
+local AfkToggle = Instance.new("TextButton")
+AfkToggle.Size = UDim2.fromOffset(72, 34)
+AfkToggle.Position = UDim2.new(1, -82, 0.5, -17)
+AfkToggle.BackgroundColor3 = Color3.fromRGB(25, 55, 78)
+AfkToggle.BorderSizePixel = 0
+AfkToggle.Text = "OFF"
+AfkToggle.TextColor3 = SUBTEXT
+AfkToggle.TextSize = 10
+AfkToggle.Font = Enum.Font.GothamBold
+AfkToggle.AutoButtonColor = false
+AfkToggle.ZIndex = 8
+AfkToggle.Parent = AfkCard
+
+AddCorner(AfkToggle, 10)
+
+local function RefreshStatus()
+    local Parts = {}
+    if AutoSell then table.insert(Parts, "Auto Sell") end
+    if AntiAfk then table.insert(Parts, "Anti AFK") end
+
+    if #Parts == 0 then
+        StatusText.Text = "IDLE"
+        StatusText.TextColor3 = SUBTEXT
+        StatusDot.BackgroundColor3 = Color3.fromRGB(75, 100, 120)
+    else
+        StatusText.Text = "RUNNING • " .. table.concat(Parts, " + ")
+        StatusText.TextColor3 = LIGHT_BLUE
+        StatusDot.BackgroundColor3 = GREEN
+    end
+end
+
+local function StopAutoSell()
+    AutoSell = false
+    if LoopConnection then
+        LoopConnection:Disconnect()
+        LoopConnection = nil
+    end
+    Toggle.Text = "OFF"
+    Tween(Toggle, 0.15, { BackgroundColor3 = Color3.fromRGB(25, 55, 78) }):Play()
+    Toggle.TextColor3 = SUBTEXT
+    CardDescription.Text = "เก็บเงินอัตโนมัติ"
+    RefreshStatus()
+end
+
+local function StartAutoSell()
+    AutoSell = true
+    Toggle.Text = "ON"
+    Tween(Toggle, 0.15, { BackgroundColor3 = BLUE }):Play()
+    Toggle.TextColor3 = WHITE
+    CardDescription.Text = "กำลังเก็บเงิน..."
+    RefreshStatus()
+
+    LoopConnection = RunService.Heartbeat:Connect(function()
+        if not AutoSell then return end
+        for i = 1, 20 do
+            pcall(function()
+                HouseEvent:FireServer("Sell")
+            end)
+        end
+    end)
+end
+
+Toggle.MouseButton1Click:Connect(function()
+    if AutoSell then
+        StopAutoSell()
+    else
+        StartAutoSell()
+    end
+end)
+
+local function StopAntiAfk()
+    AntiAfk = false
+    if AntiAfkConnection then
+        AntiAfkConnection:Disconnect()
+        AntiAfkConnection = nil
+    end
+    AfkToggle.Text = "OFF"
+    Tween(AfkToggle, 0.15, { BackgroundColor3 = Color3.fromRGB(25, 55, 78) }):Play()
+    AfkToggle.TextColor3 = SUBTEXT
+    AfkDescription.Text = "กันหลุดอัตโนมัติ"
+    RefreshStatus()
+end
+
+local function StartAntiAfk()
+    AntiAfk = true
+    AfkToggle.Text = "ON"
+    Tween(AfkToggle, 0.15, { BackgroundColor3 = BLUE }):Play()
+    AfkToggle.TextColor3 = WHITE
+    AfkDescription.Text = "กำลังป้องกัน..."
+    RefreshStatus()
+
+    AntiAfkConnection = Player.Idled:Connect(function()
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    end)
+end
+
+AfkToggle.MouseButton1Click:Connect(function()
+    if AntiAfk then
+        StopAntiAfk()
+    else
+        StartAntiAfk()
+    end
+end)
+
+local SocialTitle = Instance.new("TextLabel")
+SocialTitle.Size = UDim2.new(1, -20, 0, 20)
+SocialTitle.Position = UDim2.fromOffset(10, 290)
+SocialTitle.BackgroundTransparency = 1
+SocialTitle.Text = "SOCIAL"
+SocialTitle.TextColor3 = LIGHT_BLUE
+SocialTitle.TextSize = 9
+SocialTitle.Font = Enum.Font.GothamBold
+SocialTitle.TextXAlignment = Enum.TextXAlignment.Left
+SocialTitle.ZIndex = 7
+SocialTitle.Parent = Window
+
+local function CreateSocialButton(PositionY, ButtonTitle, ButtonDescription, Callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -20, 0, 42)
+    Button.Position = UDim2.fromOffset(10, PositionY)
+    Button.BackgroundColor3 = PANEL
+    Button.BorderSizePixel = 0
+    Button.Text = ""
+    Button.AutoButtonColor = false
+    Button.ZIndex = 6
+    Button.Parent = Window
+
+    AddCorner(Button, 10)
+    AddStroke(Button, BLUE, 1, 0.55)
+
+    local Name = Instance.new("TextLabel")
+    Name.Size = UDim2.new(1, -25, 0, 18)
+    Name.Position = UDim2.fromOffset(12, 4)
+    Name.BackgroundTransparency = 1
+    Name.Text = ButtonTitle
+    Name.TextColor3 = TEXT
+    Name.TextSize = 10
+    Name.Font = Enum.Font.GothamBold
+    Name.TextXAlignment = Enum.TextXAlignment.Left
+    Name.ZIndex = 8
+    Name.Parent = Button
+
+    local Description = Instance.new("TextLabel")
+    Description.Size = UDim2.new(1, -25, 0, 15)
+    Description.Position = UDim2.fromOffset(12, 21)
+    Description.BackgroundTransparency = 1
+    Description.Text = ButtonDescription
+    Description.TextColor3 = SUBTEXT
+    Description.TextSize = 8
+    Description.Font = Enum.Font.Gotham
+    Description.TextXAlignment = Enum.TextXAlignment.Left
+    Description.ZIndex = 8
+    Description.Parent = Button
+
+    Button.MouseEnter:Connect(function()
+        Tween(Button, 0.15, { BackgroundColor3 = Color3.fromRGB(18, 47, 72) }):Play()
+    end)
+
+    Button.MouseLeave:Connect(function()
+        Tween(Button, 0.15, { BackgroundColor3 = PANEL }):Play()
+    end)
+
+    Button.MouseButton1Click:Connect(Callback)
+    return Button
+end
+
+CreateSocialButton(313, "Copy Discord", "คัดลอกลิงก์ Discord", function()
+    if setclipboard then
+        setclipboard("https://discord.gg/W3ZJry6nTu")
+    end
+end)
+
+local NoticeLabel = Instance.new("TextLabel")
+NoticeLabel.Size = UDim2.new(1, -20, 0, 30)
+NoticeLabel.Position = UDim2.fromOffset(10, 362)
+NoticeLabel.BackgroundTransparency = 1
+NoticeLabel.Text = "⚠️ หากใช้ไม่ได้ ให้ไปซื้อบ้านก่อน"
+NoticeLabel.TextColor3 = RED
+NoticeLabel.TextSize = 10
+NoticeLabel.Font = Enum.Font.GothamBold
+NoticeLabel.TextXAlignment = Enum.TextXAlignment.Center
+NoticeLabel.ZIndex = 7
+NoticeLabel.Parent = Window
+
+task.spawn(function()
+    while NoticeLabel.Parent do
+        Tween(NoticeLabel, 0.8, { TextTransparency = 0.4 }):Play()
+        task.wait(0.8)
+        Tween(NoticeLabel, 0.8, { TextTransparency = 0 }):Play()
+        task.wait(0.8)
+    end
+end)
+
+StopAutoSell()
+StopAntiAfk()

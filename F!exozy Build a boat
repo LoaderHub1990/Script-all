@@ -1,0 +1,1141 @@
+--!native
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+
+local plr = Players.LocalPlayer
+
+local cfg = {
+    farmActive = false,
+    farmCancelled = false,
+    tpDelay = 2,
+    runDelay = 4,
+    antiAfk = false,
+}
+
+local ouro = 0
+local fase = 1
+
+local ICO = {
+    float = "rbxassetid://71098406459023",
+    glow = "rbxassetid://5028857084",
+    farm = "rbxassetid://7185431419",
+    afk = "rbxassetid://5079239321",
+    header = "rbxassetid://8498174594",
+}
+
+local BLUE = Color3.fromRGB(50, 155, 255)
+local BLUE2 = Color3.fromRGB(90, 205, 255)
+local LIGHT_BLUE = Color3.fromRGB(180, 235, 255)
+
+local WHITE = Color3.fromRGB(255, 255, 255)
+local BG = Color3.fromRGB(7, 14, 24)
+local PANEL = Color3.fromRGB(12, 23, 38)
+local ROW_BG = Color3.fromRGB(14, 29, 47)
+local STROKE = Color3.fromRGB(55, 130, 190)
+
+local GREEN = Color3.fromRGB(55, 210, 120)
+local RED = Color3.fromRGB(235, 75, 90)
+
+local function tween(obj, time, props)
+    return TweenService:Create(
+        obj,
+        TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        props
+    )
+end
+
+local function addCorner(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius)
+    c.Parent = obj
+    return c
+end
+
+local function addStroke(obj, color, thickness, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0
+    s.Parent = obj
+    return s
+end
+
+local function animateGradient(gradient, speed)
+    task.spawn(function()
+        local offset = 0
+
+        while gradient and gradient.Parent do
+            offset += speed or 0.008
+
+            if offset >= 1 then
+                offset = 0
+            end
+
+            gradient.Offset = Vector2.new(offset, 0)
+
+            task.wait()
+        end
+    end)
+end
+
+local function createBlueGradient(parent, rotation)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.25, Color3.fromRGB(180, 235, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(55, 165, 255)),
+        ColorSequenceKeypoint.new(0.75, Color3.fromRGB(120, 215, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+    })
+    gradient.Rotation = rotation or 0
+    gradient.Parent = parent
+
+    animateGradient(gradient, 0.006)
+
+    return gradient
+end
+
+local function startAntiAfk()
+    task.spawn(function()
+        while cfg.antiAfk do
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(Vector2.new())
+            end)
+
+            task.wait(55)
+        end
+    end)
+end
+
+local function doRun(notifyFn)
+
+    local char = plr.Character
+
+    if not char then
+        plr.CharacterAdded:Wait()
+        char = plr.Character
+    end
+
+    local r = char:FindFirstChild("HumanoidRootPart")
+
+    if not r then
+        return
+    end
+
+    local stages =
+        workspace:FindFirstChild("BoatStages")
+        and workspace.BoatStages:FindFirstChild("NormalStages")
+
+    if not stages then
+        notifyFn("not found NormalStages!")
+        cfg.farmActive = false
+        return
+    end
+
+    for i = 1, 10 do
+
+        if not cfg.farmActive or cfg.farmCancelled then
+            return
+        end
+
+        local stage = stages:FindFirstChild("CaveStage" .. i)
+
+        if stage then
+
+            local dp = stage:FindFirstChild("DarknessPart")
+
+            if dp then
+
+                r.CFrame = dp.CFrame
+
+                local floor = Instance.new("Part")
+
+                floor.Anchored = true
+                floor.CanCollide = true
+                floor.Size = Vector3.new(10, 1, 10)
+                floor.Transparency = 1
+                floor.Position = r.Position - Vector3.new(0, 3, 0)
+                floor.Parent = char
+
+                task.wait(cfg.tpDelay)
+
+                floor:Destroy()
+
+                fase = i
+
+                notifyFn("Stage " .. i .. "/10")
+
+            end
+        end
+    end
+
+    if not cfg.farmActive or cfg.farmCancelled then
+        return
+    end
+
+    local theEnd = stages:FindFirstChild("TheEnd")
+
+    if theEnd then
+
+        local chest = theEnd:FindFirstChild("GoldenChest")
+
+        if chest then
+
+            local trigger = chest:FindFirstChild("Trigger")
+
+            if trigger then
+
+                r.CFrame = trigger.CFrame
+
+                local waited = 0
+                local got = false
+
+                while waited < 10 and cfg.farmActive do
+
+                    task.wait(0.5)
+
+                    waited += 0.5
+
+                    if Lighting.ClockTime ~= 14 then
+                        got = true
+                        break
+                    end
+                end
+
+                if got then
+                    ouro += 100
+                    notifyFn("Gold! " .. ouro .. " Gold")
+                end
+            end
+        end
+    end
+
+    if not cfg.farmActive or cfg.farmCancelled then
+        return
+    end
+
+    local spawned = false
+    local conn
+
+    conn = plr.CharacterAdded:Connect(function()
+        spawned = true
+
+        if conn then
+            conn:Disconnect()
+        end
+    end)
+
+    local t = 0
+
+    while not spawned
+        and cfg.farmActive
+        and t < 30 do
+
+        task.wait(1)
+        t += 1
+    end
+
+    if spawned then
+        task.wait(2)
+    end
+
+    task.wait(cfg.runDelay)
+end
+
+local gui = Instance.new("ScreenGui")
+
+gui.Name = "F!exozyHubX"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = plr:WaitForChild("PlayerGui")
+
+local function drag(obj)
+
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+
+    obj.InputBegan:Connect(function(input)
+
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            dragging = true
+            dragStart = input.Position
+            startPos = obj.Position
+
+            input.Changed:Connect(function()
+
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+
+            end)
+        end
+    end)
+
+    obj.InputChanged:Connect(function(input)
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            dragInput = input
+        end
+
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+
+        if input == dragInput and dragging then
+
+            local delta = input.Position - dragStart
+
+            obj.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+
+    end)
+end
+
+local Float = Instance.new("ImageButton")
+Float.Name = "OpenButton"
+Float.Size = UDim2.new(0, 58, 0, 58)
+Float.Position = UDim2.new(0.5, -29, 0.5, -29)
+Float.BackgroundColor3 = BG
+Float.BorderSizePixel = 0
+Float.Image = ICO.float
+Float.ImageColor3 = WHITE
+Float.ScaleType = Enum.ScaleType.Fit
+Float.AutoButtonColor = false
+Float.ZIndex = 20
+Float.Parent = gui
+
+addCorner(Float, 100)
+
+local floatGradient = createBlueGradient(Float, 45)
+
+local floatStroke = addStroke(
+    Float,
+    BLUE2,
+    2.5,
+    0
+)
+
+local glowRing = Instance.new("ImageLabel")
+glowRing.Size = UDim2.new(1, 28, 1, 28)
+glowRing.Position = UDim2.new(0, -14, 0, -14)
+glowRing.BackgroundTransparency = 1
+glowRing.Image = ICO.glow
+glowRing.ImageColor3 = BLUE2
+glowRing.ImageTransparency = 0.45
+glowRing.ZIndex = 19
+glowRing.Parent = Float
+
+task.spawn(function()
+
+    while glowRing.Parent do
+
+        tween(glowRing, 1.1, {
+            ImageTransparency = 0.78
+        }):Play()
+
+        task.wait(1.1)
+
+        tween(glowRing, 1.1, {
+            ImageTransparency = 0.35
+        }):Play()
+
+        task.wait(1.1)
+    end
+end)
+
+drag(Float)
+
+local SIZE_X = 315
+local SIZE_Y = 365
+
+local F = Instance.new("Frame")
+
+F.Name = "Main"
+F.Size = UDim2.new(0, SIZE_X, 0, SIZE_Y)
+F.Position = UDim2.new(0.5, -SIZE_X / 2, 0.5, -SIZE_Y / 2)
+F.BackgroundColor3 = BG
+F.BorderSizePixel = 0
+F.Visible = false
+F.ZIndex = 5
+F.Parent = gui
+
+addCorner(F, 18)
+
+local fStroke = addStroke(
+    F,
+    BLUE,
+    1.5,
+    0.15
+)
+
+local bgGradient = Instance.new("UIGradient")
+
+bgGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(8, 18, 32)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(12, 32, 52)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(6, 14, 25)),
+})
+
+bgGradient.Rotation = 135
+bgGradient.Parent = F
+
+animateGradient(bgGradient, 0.0025)
+
+drag(F)
+
+Float.MouseButton1Click:Connect(function()
+
+    F.Visible = not F.Visible
+
+    if F.Visible then
+
+        F.BackgroundTransparency = 1
+
+        tween(F, 0.2, {
+            BackgroundTransparency = 0
+        }):Play()
+
+        tween(Float, 0.2, {
+            Size = UDim2.new(0, 54, 0, 54)
+        }):Play()
+
+    else
+
+        tween(Float, 0.2, {
+            Size = UDim2.new(0, 58, 0, 58)
+        }):Play()
+    end
+end)
+
+local hdr = Instance.new("Frame")
+
+hdr.Size = UDim2.new(1, -18, 0, 48)
+hdr.Position = UDim2.new(0, 9, 0, 9)
+hdr.BackgroundColor3 = PANEL
+hdr.BorderSizePixel = 0
+hdr.ZIndex = 6
+hdr.Parent = F
+
+addCorner(hdr, 12)
+
+local hdrGradient = createBlueGradient(hdr, 0)
+
+local hdrStroke = addStroke(
+    hdr,
+    LIGHT_BLUE,
+    1,
+    0.3
+)
+
+local hdrIco = Instance.new("ImageLabel")
+
+hdrIco.Size = UDim2.new(0, 28, 0, 28)
+hdrIco.Position = UDim2.new(0, 10, 0.5, -14)
+hdrIco.BackgroundTransparency = 1
+hdrIco.Image = ICO.header
+hdrIco.ImageColor3 = WHITE
+hdrIco.ScaleType = Enum.ScaleType.Fit
+hdrIco.ZIndex = 7
+hdrIco.Parent = hdr
+
+local hdrTxt = Instance.new("TextLabel")
+
+hdrTxt.Size = UDim2.new(1, -55, 0, 22)
+hdrTxt.Position = UDim2.new(0, 48, 0, 5)
+hdrTxt.BackgroundTransparency = 1
+hdrTxt.Text = "F!exozy Hub X"
+hdrTxt.Font = Enum.Font.GothamBold
+hdrTxt.TextSize = 15
+hdrTxt.TextColor3 = WHITE
+hdrTxt.TextXAlignment = Enum.TextXAlignment.Left
+hdrTxt.ZIndex = 7
+hdrTxt.Parent = hdr
+
+local subTxt = Instance.new("TextLabel")
+
+subTxt.Size = UDim2.new(1, -55, 0, 15)
+subTxt.Position = UDim2.new(0, 48, 0, 26)
+subTxt.BackgroundTransparency = 1
+subTxt.Text = "Build A Boat - Utility"
+subTxt.Font = Enum.Font.Gotham
+subTxt.TextSize = 9
+subTxt.TextColor3 = Color3.fromRGB(225, 245, 255)
+subTxt.TextXAlignment = Enum.TextXAlignment.Left
+subTxt.ZIndex = 7
+subTxt.Parent = hdr
+
+local statusBar = Instance.new("Frame")
+
+statusBar.Size = UDim2.new(1, -18, 0, 28)
+statusBar.Position = UDim2.new(0, 9, 0, 65)
+statusBar.BackgroundColor3 = PANEL
+statusBar.BorderSizePixel = 0
+statusBar.ZIndex = 6
+statusBar.Parent = F
+
+addCorner(statusBar, 9)
+addStroke(statusBar, STROKE, 1, 0.4)
+
+local statusDot = Instance.new("Frame")
+
+statusDot.Size = UDim2.new(0, 8, 0, 8)
+statusDot.Position = UDim2.new(0, 10, 0.5, -4)
+statusDot.BackgroundColor3 = Color3.fromRGB(80, 100, 120)
+statusDot.BorderSizePixel = 0
+statusDot.ZIndex = 7
+statusDot.Parent = statusBar
+
+addCorner(statusDot, 100)
+
+local statusTxt = Instance.new("TextLabel")
+
+statusTxt.Size = UDim2.new(1, -32, 1, 0)
+statusTxt.Position = UDim2.new(0, 28, 0, 0)
+statusTxt.BackgroundTransparency = 1
+statusTxt.Text = "IDLE"
+statusTxt.TextColor3 = Color3.fromRGB(170, 200, 220)
+statusTxt.TextXAlignment = Enum.TextXAlignment.Left
+statusTxt.TextSize = 10
+statusTxt.Font = Enum.Font.GothamBold
+statusTxt.ZIndex = 7
+statusTxt.Parent = statusBar
+
+local notifyTxt = Instance.new("TextLabel")
+
+notifyTxt.Size = UDim2.new(1, -18, 0, 18)
+notifyTxt.Position = UDim2.new(0, 9, 0, 97)
+notifyTxt.BackgroundTransparency = 1
+notifyTxt.Text = ""
+notifyTxt.TextColor3 = LIGHT_BLUE
+notifyTxt.TextXAlignment = Enum.TextXAlignment.Left
+notifyTxt.TextSize = 9
+notifyTxt.Font = Enum.Font.Gotham
+notifyTxt.ZIndex = 6
+notifyTxt.Parent = F
+
+local notifyThread
+
+local function notify(msg)
+
+    notifyTxt.Text = msg
+
+    if notifyThread then
+        task.cancel(notifyThread)
+    end
+
+    notifyThread = task.delay(3, function()
+
+        notifyTxt.Text = ""
+        notifyThread = nil
+
+    end)
+end
+
+local dotThread
+
+local function startDotPulse()
+
+    if dotThread then
+        return
+    end
+
+    dotThread = task.spawn(function()
+
+        while cfg.farmActive or cfg.antiAfk do
+
+            tween(statusDot, 0.55, {
+                BackgroundTransparency = 0.1
+            }):Play()
+
+            task.wait(0.55)
+
+            tween(statusDot, 0.55, {
+                BackgroundTransparency = 0.7
+            }):Play()
+
+            task.wait(0.55)
+        end
+
+        statusDot.BackgroundTransparency = 0
+        dotThread = nil
+    end)
+end
+
+local function refreshStatus()
+
+    local parts = {}
+
+    if cfg.farmActive then
+        table.insert(parts, "Farm")
+    end
+
+    if cfg.antiAfk then
+        table.insert(parts, "AntiAFK")
+    end
+
+    if #parts == 0 then
+
+        statusTxt.Text = "IDLE"
+        statusTxt.TextColor3 = Color3.fromRGB(170, 200, 220)
+        statusDot.BackgroundColor3 = Color3.fromRGB(80, 100, 120)
+
+    else
+
+        statusTxt.Text = "RUNNING - " .. table.concat(parts, " + ")
+        statusTxt.TextColor3 = LIGHT_BLUE
+        statusDot.BackgroundColor3 = BLUE
+
+        startDotPulse()
+    end
+end
+
+local scroll = Instance.new("ScrollingFrame")
+
+scroll.Size = UDim2.new(1, -18, 1, -125)
+scroll.Position = UDim2.new(0, 9, 0, 119)
+scroll.BackgroundTransparency = 1
+scroll.BorderSizePixel = 0
+scroll.ScrollBarThickness = 3
+scroll.ScrollBarImageColor3 = BLUE
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+scroll.ZIndex = 6
+scroll.Parent = F
+
+local listLayout = Instance.new("UIListLayout")
+
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 7)
+listLayout.Parent = scroll
+
+local listPad = Instance.new("UIPadding")
+
+listPad.PaddingTop = UDim.new(0, 2)
+listPad.PaddingBottom = UDim.new(0, 8)
+listPad.Parent = scroll
+
+local function makeRow(
+    parent,
+    order,
+    rowIcon,
+    labelTxt,
+    descTxt,
+    accentColor
+)
+
+    local row = Instance.new("Frame")
+
+    row.Size = UDim2.new(1, -4, 0, 65)
+    row.BackgroundColor3 = ROW_BG
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order
+    row.ZIndex = 6
+    row.Parent = parent
+
+    addCorner(row, 12)
+
+    local rowStroke = addStroke(
+        row,
+        STROKE,
+        1,
+        0.45
+    )
+
+    local icoBox = Instance.new("Frame")
+
+    icoBox.Size = UDim2.new(0, 40, 0, 40)
+    icoBox.Position = UDim2.new(0, 10, 0.5, -20)
+    icoBox.BackgroundColor3 = Color3.fromRGB(19, 43, 67)
+    icoBox.BorderSizePixel = 0
+    icoBox.ZIndex = 7
+    icoBox.Parent = row
+
+    addCorner(icoBox, 10)
+
+    local icoGradient = createBlueGradient(icoBox, 45)
+
+    local icoImg = Instance.new("ImageLabel")
+
+    icoImg.Size = UDim2.new(0, 23, 0, 23)
+    icoImg.Position = UDim2.new(0.5, -11.5, 0.5, -11.5)
+    icoImg.BackgroundTransparency = 1
+    icoImg.Image = rowIcon
+    icoImg.ImageColor3 = WHITE
+    icoImg.ScaleType = Enum.ScaleType.Fit
+    icoImg.ZIndex = 8
+    icoImg.Parent = icoBox
+
+    local dot = Instance.new("Frame")
+
+    dot.Size = UDim2.new(0, 9, 0, 9)
+    dot.Position = UDim2.new(1, -4, 0, -4)
+    dot.BackgroundColor3 = Color3.fromRGB(70, 95, 115)
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 9
+    dot.Parent = icoBox
+
+    addCorner(dot, 100)
+
+    local lbl = Instance.new("TextLabel")
+
+    lbl.Size = UDim2.new(1, -125, 0, 22)
+    lbl.Position = UDim2.new(0, 60, 0, 9)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelTxt
+    lbl.TextColor3 = WHITE
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextSize = 12
+    lbl.Font = Enum.Font.GothamBold
+    lbl.ZIndex = 7
+    lbl.Parent = row
+
+    local desc = Instance.new("TextLabel")
+
+    desc.Size = UDim2.new(1, -125, 0, 16)
+    desc.Position = UDim2.new(0, 60, 0, 33)
+    desc.BackgroundTransparency = 1
+    desc.Text = descTxt
+    desc.TextColor3 = Color3.fromRGB(145, 180, 205)
+    desc.TextXAlignment = Enum.TextXAlignment.Left
+    desc.TextSize = 9
+    desc.Font = Enum.Font.Gotham
+    desc.ZIndex = 7
+    desc.Parent = row
+
+    local btn = Instance.new("TextButton")
+
+    btn.Size = UDim2.new(0, 66, 0, 32)
+    btn.Position = UDim2.new(1, -76, 0.5, -16)
+    btn.BackgroundColor3 = accentColor
+    btn.BorderSizePixel = 0
+    btn.Text = "START"
+    btn.TextColor3 = WHITE
+    btn.TextSize = 10
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = false
+    btn.ZIndex = 7
+    btn.Parent = row
+
+    addCorner(btn, 9)
+
+    local btnGradient = createBlueGradient(btn, 0)
+
+    return {
+        row = row,
+        icoImg = icoImg,
+        dot = dot,
+        lbl = lbl,
+        desc = desc,
+        btn = btn,
+    }
+end
+
+local farmRow = makeRow(
+    scroll,
+    1,
+    ICO.farm,
+    "Auto Farm",
+    "Auto farm gold",
+    BLUE
+)
+
+local afkRow = makeRow(
+    scroll,
+    2,
+    ICO.afk,
+    "Anti AFK",
+    "Prevent kick",
+    Color3.fromRGB(70, 150, 210)
+)
+
+local function makeSliderRow(parent, order, labelTxt, value, callback)
+
+    local row = Instance.new("Frame")
+
+    row.Size = UDim2.new(1, -4, 0, 62)
+    row.BackgroundColor3 = ROW_BG
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order
+    row.ZIndex = 6
+    row.Parent = parent
+
+    addCorner(row, 12)
+    addStroke(row, STROKE, 1, 0.45)
+
+    local lbl = Instance.new("TextLabel")
+
+    lbl.Size = UDim2.new(1, -20, 0, 20)
+    lbl.Position = UDim2.new(0, 10, 0, 7)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelTxt .. ": " .. value .. "s"
+    lbl.TextColor3 = WHITE
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextSize = 10
+    lbl.Font = Enum.Font.GothamBold
+    lbl.ZIndex = 7
+    lbl.Parent = row
+
+    local track = Instance.new("Frame")
+
+    track.Size = UDim2.new(1, -20, 0, 7)
+    track.Position = UDim2.new(0, 10, 0, 37)
+    track.BackgroundColor3 = Color3.fromRGB(25, 47, 67)
+    track.BorderSizePixel = 0
+    track.ZIndex = 7
+    track.Parent = row
+
+    addCorner(track, 100)
+
+    local fill = Instance.new("Frame")
+
+    fill.Size = UDim2.new(value / 15, 0, 1, 0)
+    fill.BackgroundColor3 = BLUE
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 8
+    fill.Parent = track
+
+    addCorner(fill, 100)
+
+    local fillGradient = createBlueGradient(fill, 0)
+
+    local handle = Instance.new("TextButton")
+
+    handle.Size = UDim2.new(0, 16, 0, 16)
+    handle.Position = UDim2.new(value / 15, -8, 0.5, -8)
+    handle.BackgroundColor3 = WHITE
+    handle.BorderSizePixel = 0
+    handle.Text = ""
+    handle.AutoButtonColor = false
+    handle.ZIndex = 9
+    handle.Parent = track
+
+    addCorner(handle, 100)
+    addStroke(handle, BLUE, 2, 0)
+
+    local draggingSlider = false
+
+    local function updateSlider(x)
+
+        local trackAbs = track.AbsolutePosition
+        local trackSize = track.AbsoluteSize
+
+        local relX = math.clamp(
+            (x - trackAbs.X) / trackSize.X,
+            0,
+            1
+        )
+
+        local realVal =
+            math.floor(relX * 15 * 10 + 0.5) / 10
+
+        fill.Size = UDim2.new(relX, 0, 1, 0)
+
+        handle.Position =
+            UDim2.new(relX, -8, 0.5, -8)
+
+        lbl.Text =
+            labelTxt .. ": " .. realVal .. "s"
+
+        callback(realVal)
+    end
+
+    handle.InputBegan:Connect(function(input)
+
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            draggingSlider = true
+        end
+    end)
+
+    track.InputBegan:Connect(function(input)
+
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            draggingSlider = true
+            updateSlider(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            draggingSlider = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+
+        if draggingSlider
+            and (
+                input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch
+            ) then
+
+            updateSlider(input.Position.X)
+        end
+    end)
+
+    return {
+        row = row,
+        lbl = lbl,
+        fill = fill,
+        handle = handle,
+    }
+end
+
+local tpSlider = makeSliderRow(
+    scroll,
+    3,
+    "Teleport Delay",
+    cfg.tpDelay,
+    function(value)
+        cfg.tpDelay = value
+    end
+)
+
+local runSlider = makeSliderRow(
+    scroll,
+    4,
+    "Delay Per Run",
+    cfg.runDelay,
+    function(value)
+        cfg.runDelay = value
+    end
+)
+
+local farmThread
+
+local function stopFarm()
+
+    cfg.farmActive = false
+    cfg.farmCancelled = true
+
+    if farmThread then
+        task.cancel(farmThread)
+        farmThread = nil
+    end
+
+    farmRow.btn.Text = "START"
+
+    tween(farmRow.btn, 0.15, {
+        BackgroundColor3 = BLUE
+    }):Play()
+
+    farmRow.dot.BackgroundColor3 =
+        Color3.fromRGB(70, 95, 115)
+
+    farmRow.lbl.TextColor3 = WHITE
+    farmRow.desc.Text = "Auto farm gold"
+    farmRow.desc.TextColor3 =
+        Color3.fromRGB(145, 180, 205)
+
+    refreshStatus()
+
+    notify("Auto Farm stopped")
+end
+
+local function startFarm()
+
+    cfg.farmActive = true
+    cfg.farmCancelled = false
+
+    farmRow.btn.Text = "STOP"
+
+    tween(farmRow.btn, 0.15, {
+        BackgroundColor3 = Color3.fromRGB(40, 105, 165)
+    }):Play()
+
+    farmRow.dot.BackgroundColor3 = GREEN
+
+    farmRow.lbl.TextColor3 =
+        LIGHT_BLUE
+
+    farmRow.desc.Text =
+        "Farming..."
+
+    farmRow.desc.TextColor3 =
+        Color3.fromRGB(130, 210, 245)
+
+    refreshStatus()
+
+    notify("Auto Farm started")
+
+    farmThread = task.spawn(function()
+
+        while cfg.farmActive
+            and not cfg.farmCancelled do
+
+            local ok, err =
+                pcall(doRun, notify)
+
+            if not ok then
+
+                notify(
+                    "Error: " ..
+                    tostring(err)
+                )
+
+                task.wait(3)
+            end
+        end
+    end)
+end
+
+farmRow.btn.MouseEnter:Connect(function()
+
+    tween(farmRow.btn, 0.1, {
+        BackgroundColor3 =
+            cfg.farmActive
+            and Color3.fromRGB(45, 115, 175)
+            or Color3.fromRGB(90, 190, 255)
+    }):Play()
+end)
+
+farmRow.btn.MouseLeave:Connect(function()
+
+    tween(farmRow.btn, 0.1, {
+        BackgroundColor3 =
+            cfg.farmActive
+            and Color3.fromRGB(40, 105, 165)
+            or BLUE
+    }):Play()
+end)
+
+farmRow.btn.MouseButton1Click:Connect(function()
+
+    if cfg.farmActive then
+        stopFarm()
+    else
+        startFarm()
+    end
+end)
+
+local function stopAfk()
+
+    cfg.antiAfk = false
+
+    afkRow.btn.Text = "START"
+
+    tween(afkRow.btn, 0.15, {
+        BackgroundColor3 = BLUE
+    }):Play()
+
+    afkRow.dot.BackgroundColor3 =
+        Color3.fromRGB(70, 95, 115)
+
+    afkRow.lbl.TextColor3 = WHITE
+
+    afkRow.desc.Text =
+        "Prevent kick"
+
+    afkRow.desc.TextColor3 =
+        Color3.fromRGB(145, 180, 205)
+
+    refreshStatus()
+
+    notify("Anti AFK stopped")
+end
+
+local function startAfk()
+
+    cfg.antiAfk = true
+
+    afkRow.btn.Text = "STOP"
+
+    tween(afkRow.btn, 0.15, {
+        BackgroundColor3 =
+            Color3.fromRGB(40, 105, 165)
+    }):Play()
+
+    afkRow.dot.BackgroundColor3 =
+        LIGHT_BLUE
+
+    afkRow.lbl.TextColor3 =
+        LIGHT_BLUE
+
+    afkRow.desc.Text =
+        "Protecting..."
+
+    afkRow.desc.TextColor3 =
+        Color3.fromRGB(130, 210, 245)
+
+    refreshStatus()
+
+    notify("Anti AFK started")
+
+    startAntiAfk()
+end
+
+afkRow.btn.MouseEnter:Connect(function()
+
+    tween(afkRow.btn, 0.1, {
+        BackgroundColor3 =
+            cfg.antiAfk
+            and Color3.fromRGB(45, 115, 175)
+            or Color3.fromRGB(90, 190, 255)
+    }):Play()
+end)
+
+afkRow.btn.MouseLeave:Connect(function()
+
+    tween(afkRow.btn, 0.1, {
+        BackgroundColor3 =
+            cfg.antiAfk
+            and Color3.fromRGB(40, 105, 165)
+            or BLUE
+    }):Play()
+end)
+
+afkRow.btn.MouseButton1Click:Connect(function()
+
+    if cfg.antiAfk then
+        stopAfk()
+    else
+        startAfk()
+    end
+end)
+
+F.Size = UDim2.new(0, SIZE_X - 15, 0, SIZE_Y - 15)
+
+Float.MouseButton1Click:Connect(function()
+
+    if F.Visible then
+
+        F.Size = UDim2.new(
+            0,
+            SIZE_X - 15,
+            0,
+            SIZE_Y - 15
+        )
+
+        tween(F, 0.22, {
+            Size = UDim2.new(
+                0,
+                SIZE_X,
+                0,
+                SIZE_Y
+            )
+        }):Play()
+    end
+end)

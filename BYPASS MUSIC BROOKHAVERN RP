@@ -1,0 +1,469 @@
+-- F!exozy Hub X | This Script Need Music Gamepass
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RS = game:GetService("ReplicatedStorage")
+
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local LOGO_ID = "rbxassetid://135253158468501"
+local COLOR_ACCENT = Color3.fromRGB(255, 255, 255)
+local BLACK = Color3.fromRGB(12, 12, 12)
+local DARK = Color3.fromRGB(28, 28, 28)
+local WHITE = Color3.fromRGB(255, 255, 255)
+local GRAY = Color3.fromRGB(110, 110, 110)
+local FONT = Enum.Font.Gotham
+local FONT_BOLD = Enum.Font.GothamBold
+
+local function round(obj, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r or 8)
+	c.Parent = obj
+end
+
+local function stroke(obj, thickness, color)
+	local s = Instance.new("UIStroke")
+	s.Thickness = thickness or 1.5
+	s.Color = color or WHITE
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = obj
+	return s
+end
+
+local function logo(parent, size, pos)
+	local img = Instance.new("ImageLabel")
+	img.Size = size
+	img.Position = pos
+	img.BackgroundTransparency = 1
+	img.Image = LOGO_ID
+	img.ScaleType = Enum.ScaleType.Fit
+	img.Parent = parent
+	round(img, 6)
+	return img
+end
+
+local function MakeRing(parent, color, size)
+	local ring = Instance.new("Frame")
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Size = UDim2.new(0, size, 0, size)
+	ring.Position = UDim2.new(0.5, 0, 0.5, 0)
+	ring.BackgroundTransparency = 1
+	ring.ZIndex = 11
+	ring.Parent = parent
+	round(ring, size)
+
+	local s = Instance.new("UIStroke")
+	s.Thickness = 4
+	s.Color = color
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = ring
+
+	local g = Instance.new("UIGradient")
+	g.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.35, 0),
+		NumberSequenceKeypoint.new(0.36, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	g.Parent = s
+
+	return ring, s, g
+end
+
+local notiGui = Instance.new("ScreenGui")
+notiGui.Name = "FlexozyNotification"
+notiGui.ResetOnSpawn = false
+notiGui.Parent = playerGui
+
+local noti = Instance.new("Frame")
+noti.Size = UDim2.new(0, 280, 0, 70)
+noti.Position = UDim2.new(0.5, -140, 0, -80)
+noti.BackgroundColor3 = BLACK
+noti.Parent = notiGui
+round(noti, 10)
+stroke(noti, 2)
+
+logo(noti, UDim2.new(0, 46, 0, 46), UDim2.new(0, 12, 0, 12))
+
+local notiTitle = Instance.new("TextLabel")
+notiTitle.Size = UDim2.new(1, -74, 0, 26)
+notiTitle.Position = UDim2.new(0, 66, 0, 10)
+notiTitle.BackgroundTransparency = 1
+notiTitle.Font = FONT_BOLD
+notiTitle.TextSize = 16
+notiTitle.TextXAlignment = Enum.TextXAlignment.Left
+notiTitle.TextColor3 = WHITE
+notiTitle.Text = "F!exozy Hub X"
+notiTitle.Parent = noti
+
+local notiText = Instance.new("TextLabel")
+notiText.Size = UDim2.new(1, -74, 0, 26)
+notiText.Position = UDim2.new(0, 66, 0, 34)
+notiText.BackgroundTransparency = 1
+notiText.Font = FONT
+notiText.TextSize = 12
+notiText.TextXAlignment = Enum.TextXAlignment.Left
+notiText.TextColor3 = Color3.fromRGB(180, 180, 180)
+notiText.Text = "This Script Need Music Gamepass"
+notiText.Parent = noti
+
+TweenService:Create(
+	noti,
+	TweenInfo.new(0.5, Enum.EasingStyle.Quint),
+	{Position = UDim2.new(0.5, -140, 0, 20)}
+):Play()
+
+task.delay(3, function()
+	local t = TweenService:Create(
+		noti,
+		TweenInfo.new(0.4),
+		{Position = UDim2.new(0.5, -140, 0, -80)}
+	)
+	t:Play()
+	t.Completed:Wait()
+
+	if notiGui then
+		notiGui:Destroy()
+	end
+end)
+
+local remote = RS.RE["1NoMoto1rVehicle1s"]
+
+local started = false
+local playing = false
+local loading = false
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FlexozyHubX"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 290, 0, 208)
+frame.Position = UDim2.new(0.5, -145, 0.5, -104)
+frame.BackgroundColor3 = BLACK
+frame.Active = true
+frame.Parent = gui
+round(frame, 12)
+stroke(frame, 2)
+
+logo(frame, UDim2.new(0, 28, 0, 28), UDim2.new(0, 12, 0, 7))
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -90, 0, 42)
+title.Position = UDim2.new(0, 48, 0, 0)
+title.BackgroundTransparency = 1
+title.Font = FONT_BOLD
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = WHITE
+title.Text = "F!exozy Hub X"
+title.Parent = frame
+
+local line = Instance.new("Frame")
+line.Size = UDim2.new(1, -28, 0, 1)
+line.Position = UDim2.new(0, 14, 0, 42)
+line.BackgroundColor3 = WHITE
+line.BackgroundTransparency = 0.7
+line.BorderSizePixel = 0
+line.Parent = frame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 24, 0, 24)
+closeButton.Position = UDim2.new(1, -36, 0, 9)
+closeButton.BackgroundColor3 = DARK
+closeButton.Font = FONT_BOLD
+closeButton.TextSize = 14
+closeButton.TextColor3 = WHITE
+closeButton.Text = "X"
+closeButton.AutoButtonColor = false
+closeButton.Parent = frame
+round(closeButton, 6)
+stroke(closeButton, 1)
+
+closeButton.MouseEnter:Connect(function()
+	TweenService:Create(
+		closeButton,
+		TweenInfo.new(0.15),
+		{BackgroundColor3 = Color3.fromRGB(170, 30, 30)}
+	):Play()
+end)
+
+closeButton.MouseLeave:Connect(function()
+	TweenService:Create(
+		closeButton,
+		TweenInfo.new(0.15),
+		{BackgroundColor3 = DARK}
+	):Play()
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+	gui:Destroy()
+end)
+
+local buttons = {}
+
+local function makeButton(text, y)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, -28, 0, 36)
+	b.Position = UDim2.new(0, 14, 0, y)
+	b.BackgroundColor3 = DARK
+	b.Font = FONT_BOLD
+	b.TextSize = 15
+	b.TextColor3 = WHITE
+	b.Text = text
+	b.AutoButtonColor = false
+	b.Parent = frame
+	round(b, 8)
+
+	local s = stroke(b, 1.5)
+
+	buttons[b] = {
+		stroke = s,
+		enabled = true
+	}
+
+	b.MouseEnter:Connect(function()
+		if buttons[b].enabled then
+			TweenService:Create(
+				b,
+				TweenInfo.new(0.15),
+				{
+					BackgroundColor3 = WHITE,
+					TextColor3 = BLACK
+				}
+			):Play()
+		end
+	end)
+
+	b.MouseLeave:Connect(function()
+		if buttons[b].enabled then
+			TweenService:Create(
+				b,
+				TweenInfo.new(0.15),
+				{
+					BackgroundColor3 = DARK,
+					TextColor3 = WHITE
+				}
+			):Play()
+		end
+	end)
+
+	return b
+end
+
+local function setEnabled(btn, on)
+	buttons[btn].enabled = on
+	btn.BackgroundColor3 = DARK
+	btn.TextColor3 = on and WHITE or GRAY
+	buttons[btn].stroke.Color = on and WHITE or GRAY
+end
+
+local startButton = makeButton("BYPASS MUSIC", 56)
+
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(1, -28, 0, 36)
+textBox.Position = UDim2.new(0, 14, 0, 102)
+textBox.BackgroundColor3 = DARK
+textBox.Font = FONT
+textBox.TextSize = 14
+textBox.TextColor3 = GRAY
+textBox.PlaceholderText = "Enter Sounds Id"
+textBox.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
+textBox.Text = ""
+textBox.ClearTextOnFocus = false
+textBox.TextEditable = false
+textBox.Parent = frame
+round(textBox, 8)
+
+local boxStroke = stroke(textBox, 1, Color3.fromRGB(60, 60, 60))
+
+textBox.Focused:Connect(function()
+	if textBox.TextEditable then
+		boxStroke.Color = WHITE
+	end
+end)
+
+textBox.FocusLost:Connect(function()
+	boxStroke.Color = textBox.TextEditable
+		and Color3.fromRGB(90, 90, 90)
+		or Color3.fromRGB(60, 60, 60)
+end)
+
+local playButton = makeButton("เริ่มเล่น", 148)
+
+local function refresh()
+	setEnabled(startButton, not started and not loading)
+
+	local canType = started and not playing
+
+	textBox.TextEditable = canType
+	textBox.TextColor3 = canType and WHITE or GRAY
+
+	boxStroke.Color = canType
+		and Color3.fromRGB(90, 90, 90)
+		or Color3.fromRGB(60, 60, 60)
+
+	playButton.Text = playing and "หยุดเล่น" or "เริ่มเล่น"
+	setEnabled(playButton, started and not loading)
+end
+
+refresh()
+
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.new(1, 0, 1, 0)
+overlay.BackgroundColor3 = BLACK
+overlay.Active = true
+overlay.Visible = false
+overlay.ZIndex = 10
+overlay.Parent = frame
+round(overlay, 12)
+
+local SpinnerRing, SpinnerStroke, SpinnerGradient =
+	MakeRing(overlay, COLOR_ACCENT, 92)
+
+SpinnerRing.Position = UDim2.new(0.5, 0, 0.42, 0)
+
+local bigLogo = Instance.new("ImageLabel")
+bigLogo.AnchorPoint = Vector2.new(0.5, 0.5)
+bigLogo.Size = UDim2.new(0, 64, 0, 64)
+bigLogo.Position = UDim2.new(0.5, 0, 0.42, 0)
+bigLogo.BackgroundTransparency = 1
+bigLogo.Image = LOGO_ID
+bigLogo.ScaleType = Enum.ScaleType.Fit
+bigLogo.ZIndex = 12
+bigLogo.Parent = overlay
+round(bigLogo, 32)
+
+local loadText = Instance.new("TextLabel")
+loadText.Size = UDim2.new(1, 0, 0, 24)
+loadText.Position = UDim2.new(0, 0, 0.76, 0)
+loadText.BackgroundTransparency = 1
+loadText.Font = FONT_BOLD
+loadText.TextSize = 14
+loadText.TextColor3 = WHITE
+loadText.Text = "Loading..."
+loadText.ZIndex = 12
+loadText.Parent = overlay
+
+local SpinTween = TweenService:Create(
+	SpinnerGradient,
+	TweenInfo.new(
+		0.9,
+		Enum.EasingStyle.Linear,
+		Enum.EasingDirection.Out,
+		-1
+	),
+	{Rotation = 360}
+)
+
+local function showLoading()
+	loading = true
+	overlay.Visible = true
+	SpinnerGradient.Rotation = 0
+	SpinTween:Play()
+end
+
+local function hideLoading()
+	SpinTween:Cancel()
+	overlay.Visible = false
+	loading = false
+end
+
+startButton.MouseButton1Click:Connect(function()
+	if started or loading then
+		return
+	end
+
+	showLoading()
+
+	remote:FireServer("SkateBoard")
+
+	task.wait(2)
+
+	started = true
+
+	hideLoading()
+	refresh()
+end)
+
+local currentId = ""
+
+playButton.MouseButton1Click:Connect(function()
+	if not started or loading then
+		return
+	end
+
+	if not playing then
+		if textBox.Text == "" then
+			return
+		end
+
+		currentId = textBox.Text
+
+		remote:FireServer(
+			"PickingScooterMusicText",
+			currentId
+		)
+
+		playing = true
+	else
+		remote:FireServer(
+			"PickingScooterMusicText",
+			""
+		)
+
+		local idNumber = currentId:match("%d+")
+
+		if idNumber then
+			for _, obj in ipairs(workspace:GetDescendants()) do
+				if obj:IsA("Sound") and obj.SoundId:find(idNumber, 1, true) then
+					obj:Stop()
+				end
+			end
+		end
+
+		playing = false
+	end
+
+	refresh()
+end)
+
+local dragging = false
+local dragStart
+local startPos
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging
+		and (
+			input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch
+		) then
+
+		local d = input.Position - dragStart
+
+		frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + d.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + d.Y
+		)
+	end
+end)

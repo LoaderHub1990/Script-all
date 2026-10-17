@@ -1,0 +1,3867 @@
+local Flexozy = loadstring(game:HttpGet("https://raw.githubusercontent.com/LoaderHub1990/Flexozy-UI/refs/heads/main/FlexozyUI-V2.lua"))()
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- เกมบางเกมสร้างกล้องใหม่ตอนเกิด/ฉากเปลี่ยน ถ้าใช้กล้องตัวเก่าจะหาเป้าไม่เจอ
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if Workspace.CurrentCamera then
+        Camera = Workspace.CurrentCamera
+    end
+end)
+
+local Config = {
+    SilentAim = false,
+    FOV = 180,
+    MaxDistance = 800,
+    AimPart = "Head",
+    TeamCheck = false,
+    WallCheck = false,
+    ShowFOV = false,
+    ShowTracer = false,
+    SkipFriends = false,
+    KeybindNotify = true,
+    InfStamina = false,
+
+    InvMode = false, -- false | "slots" (5 ช่อง) | "all" (ทั้งหมด)
+    INV_ALL_MAX = 60,
+    InvDistance = 150,
+
+    INV_MAX_SLOTS = 5,
+    INV_SLOT_W = 44,
+    INV_SLOT_H = 54,
+    INV_SPACING = 4,
+    INV_PADDING = 6,
+    INV_ICON_SIZE = 26,
+    INV_OFFSET_Y = -2.5,
+}
+
+-- state ของระบบ ESP ใหม่
+local S = {
+    enemies = {},
+    esp_names = false,
+    esp_boxes = false,
+    esp_box_type = "Normal",
+    esp_healthbar = false,
+    esp_distance = false,
+    esp_skeleton = false,
+    esp_tracers = false,
+    esp_tracer_origin = "Bottom",
+    esp_range = 1000,
+    esp_name_color = Color3.fromRGB(255, 255, 255),
+    esp_box_color = Color3.fromRGB(255, 255, 255),
+    esp_distance_color = Color3.fromRGB(255, 255, 255),
+    esp_skeleton_color = Color3.fromRGB(255, 255, 255),
+    esp_tracer_color = Color3.fromRGB(255, 255, 255),
+    esp_data = {},
+}
+
+local InvData = {}
+
+-- ESP แต่ละอย่างทำงานอิสระ ไม่ต้องมีสวิตช์หลัก
+local function AnyESP()
+    return S.esp_names
+        or S.esp_boxes
+        or S.esp_healthbar
+        or S.esp_distance
+        or S.esp_skeleton
+        or S.esp_tracers
+end
+local CurrentTarget = nil
+local TargetCount = 0
+local Hooked = false
+
+local Tg = {} -- เก็บ Toggle ไว้ให้ปุ่มลัดเรียกใช้
+
+-- ===== รายชื่อข้าม (ไม่ล็อกเพื่อน / ผู้เล่นที่เลือก) =====
+local SkipSet = {}          -- [ชื่อผู้เล่น] = true
+local FriendCache = {}      -- [UserId] = true/false
+local SkipOptionToName = {} -- ข้อความในตัวเลือก -> ชื่อผู้เล่นจริง
+local SkipDropdown
+
+local function RefreshFriend(player)
+    task.spawn(function()
+        local ok, res = pcall(function()
+            return LocalPlayer:IsFriendsWith(player.UserId)
+        end)
+
+        FriendCache[player.UserId] = ok and res == true
+    end)
+end
+
+local function IsSkipped(player)
+    if SkipSet[player.Name] then
+        return true
+    end
+
+    if Config.SkipFriends and FriendCache[player.UserId] then
+        return true
+    end
+
+    return false
+end
+
+-- รันส่วนที่เสี่ยง error แบบแยกตัว: ถ้าพังจะแจ้งใน Console แต่สคริปต์ส่วนที่เหลือยังโหลดต่อ
+local function Safe(name, fn)
+    local ok, err = pcall(fn)
+
+    if not ok then
+        warn("[Flexozy] " .. name .. " error: " .. tostring(err))
+    end
+end
+
+local function MakeDrawing(kind, props)
+    local ok, obj = pcall(function()
+        return Drawing.new(kind)
+    end)
+
+    if not ok or not obj then
+        return nil
+    end
+
+    -- ตั้งทีละค่า: ค่าไหน executor ไม่รองรับก็ข้าม ไม่ทำให้พังทั้งก้อน
+    for k, v in pairs(props) do
+        pcall(function()
+            obj[k] = v
+        end)
+    end
+
+    return obj
+end
+
+local function ProtectParent(gui)
+    pcall(function()
+        gui.Parent = CoreGui
+    end)
+
+    if not gui.Parent then
+        gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+end
+
+local function IsWallBlocked(fromPos, toPos, ignoreChar)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+
+    local result = Workspace:Raycast(fromPos, toPos - fromPos, params)
+
+    if result then
+        return not result.Instance:IsDescendantOf(ignoreChar)
+    end
+
+    return false
+end
+
+-- ========== Silent Aim ==========
+
+local function GetTarget()
+    if not Config.SilentAim then
+        CurrentTarget = nil
+        TargetCount = 0
+        return nil
+    end
+
+    local closestPart = nil
+    local closestPlayer = nil
+    local closestDist = Config.FOV + 1
+    local count = 0
+    local screenCenter = Vector2.new(
+        Camera.ViewportSize.X / 2,
+        Camera.ViewportSize.Y / 2
+    )
+
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and (
+        myChar:FindFirstChild("HumanoidRootPart")
+        or myChar:FindFirstChild("UpperTorso")
+        or myChar:FindFirstChild("Torso")
+    )
+
+    if not myRoot then
+        CurrentTarget = nil
+        TargetCount = 0
+        return nil
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and not IsSkipped(player) then
+            local char = player.Character
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local aimPart = char:FindFirstChild(Config.AimPart)
+                or char:FindFirstChild("Head")
+            local root = char:FindFirstChild("HumanoidRootPart")
+                or char:FindFirstChild("UpperTorso")
+                or char:FindFirstChild("Torso")
+
+            if humanoid and humanoid.Health > 0 and aimPart and root then
+                local teamCheck = Config.TeamCheck
+                    and player.Team
+                    and LocalPlayer.Team
+                    and player.Team == LocalPlayer.Team
+
+                if not teamCheck
+                    and (myRoot.Position - root.Position).Magnitude <= Config.MaxDistance then
+
+                    local pos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+
+                    if onScreen and pos.Z > 0 then
+                        local dist = (
+                            Vector2.new(pos.X, pos.Y) - screenCenter
+                        ).Magnitude
+
+                        if dist <= Config.FOV then
+                            local wallBlocked = Config.WallCheck
+                                and IsWallBlocked(
+                                    Camera.CFrame.Position,
+                                    aimPart.Position,
+                                    char
+                                )
+
+                            if not wallBlocked then
+                                count += 1
+
+                                if dist < closestDist then
+                                    closestDist = dist
+                                    closestPlayer = player
+                                    closestPart = aimPart
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    CurrentTarget = closestPlayer
+    TargetCount = count
+
+    return closestPart
+end
+
+local HookedHandlers = setmetatable({}, {__mode = "k"})
+local hookWarned = false
+local hookCallCount = 0
+
+-- หาโมดูล ProjectileHandler (ลองเส้นทางเดิมก่อน แล้วค้นหาโมดูลที่ชื่อมีคำว่า projectile)
+local function ResolveProjectileHandler()
+    local ok, handler = pcall(function()
+        local modules = ReplicatedStorage:FindFirstChild("Modules")
+        local mod = modules and modules:FindFirstChild("ProjectileHandler")
+
+        if mod then
+            return require(mod)
+        end
+
+        return nil
+    end)
+
+    if ok and typeof(handler) == "table" and typeof(handler.SimulateProjectile) == "function" then
+        return handler
+    end
+
+    for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+        if d:IsA("ModuleScript") and string.find(string.lower(d.Name), "projectile", 1, true) then
+            local ok2, res = pcall(require, d)
+
+            if ok2 and typeof(res) == "table" and typeof(res.SimulateProjectile) == "function" then
+                return res
+            end
+        end
+    end
+
+    return nil
+end
+
+-- แทนทิศทางกระสุนในอาร์กิวเมนต์ (ตำแหน่งเดิม 13, 14) ถ้าไม่เจอ Vector3 ตรงนั้น
+-- จะลองหา Vector3 ที่ยาวประมาณ 1 (เวกเตอร์ทิศทาง) แทน เผื่อเกมอัปเดตแล้วลำดับอาร์กิวเมนต์เปลี่ยน
+local function RedirectArgs(args, unit)
+    local replaced = false
+
+    for _, i in ipairs({13, 14}) do
+        local a = args[i]
+
+        if typeof(a) == "Vector3" then
+            args[i] = unit
+            replaced = true
+        elseif typeof(a) == "table" then
+            for k, v in pairs(a) do
+                if typeof(v) == "Vector3" then
+                    a[k] = unit
+                    replaced = true
+                end
+            end
+        end
+    end
+
+    if not replaced then
+        for i = 1, args.n do
+            local a = args[i]
+
+            if typeof(a) == "Vector3" and math.abs(a.Magnitude - 1) < 0.01 then
+                args[i] = unit
+                replaced = true
+            end
+        end
+    end
+
+    return replaced
+end
+
+-- คืน true ถ้า hook สำเร็จ
+local function HookProjectile()
+    local handler = ResolveProjectileHandler()
+
+    if not handler then
+        if not hookWarned then
+            hookWarned = true
+            warn("[Flexozy] ไม่พบ ProjectileHandler / SimulateProjectile (ชื่อโมดูลอาจเปลี่ยน หรือเกมยังโหลดไม่เสร็จ)")
+        end
+
+        return false
+    end
+
+    local existing = HookedHandlers[handler]
+
+    if existing and handler.SimulateProjectile == existing then
+        Hooked = true
+        return true
+    end
+
+    local original = handler.SimulateProjectile
+
+    local function wrapper(...)
+        hookCallCount += 1
+        local log = hookCallCount <= 3
+
+        if Config.SilentAim then
+            local targetPart = GetTarget()
+
+            if targetPart and targetPart.Parent then
+                -- table.pack/unpack กันอาร์กิวเมนต์ที่เป็น nil ทำให้ถูกตัดท้าย
+                local args = table.pack(...)
+                local origin = args[15]
+                local worldPos
+
+                if origin then
+                    if typeof(origin) == "Instance"
+                        and origin:IsA("Attachment") then
+                        worldPos = origin.WorldPosition
+                    elseif typeof(origin) == "Vector3" then
+                        worldPos = origin
+                    end
+                end
+
+                if not worldPos
+                    and args[11]
+                    and typeof(args[11]) == "Instance" then
+
+                    local firePoint = args[11]:FindFirstChild("GunFirePoint")
+                        or args[11]:FindFirstChild("FirePoint")
+
+                    if firePoint then
+                        worldPos = firePoint:IsA("Attachment")
+                            and firePoint.WorldPosition
+                            or firePoint.Position
+                    end
+                end
+
+                if not worldPos and LocalPlayer.Character then
+                    local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        worldPos = root.Position
+                    end
+                end
+
+                if not worldPos then
+                    worldPos = Camera.CFrame.Position
+                end
+
+                local dir = targetPart.Position - worldPos
+                local replaced = false
+
+                if dir.Magnitude > 0.001 then
+                    replaced = RedirectArgs(args, dir.Unit)
+                end
+
+                if log then
+                    print(string.format(
+                        "[Flexozy] SimulateProjectile ถูกเรียก (ครั้งที่ %d) | เป้า: %s | อาร์กิวเมนต์: %d | แก้ทิศทางได้: %s",
+                        hookCallCount, targetPart.Parent.Name, args.n, tostring(replaced)
+                    ))
+                end
+
+                return original(table.unpack(args, 1, args.n))
+            elseif log then
+                print(string.format("[Flexozy] SimulateProjectile ถูกเรียก (ครั้งที่ %d) แต่ไม่มีเป้าหมายในระยะ/FOV", hookCallCount))
+            end
+        elseif log then
+            print(string.format("[Flexozy] SimulateProjectile ถูกเรียก (ครั้งที่ %d) แต่ SilentAim ปิดอยู่", hookCallCount))
+        end
+
+        return original(...)
+    end
+
+    handler.SimulateProjectile = wrapper
+    HookedHandlers[handler] = wrapper
+
+    Hooked = true
+    hookWarned = false
+    print("[Flexozy] Hooked")
+
+    return true
+end
+
+-- ถ้ายังไม่เจอโมดูล จะลองใหม่ทุก 3 วินาทีตราบที่ SilentAim เปิดอยู่
+local hookLoopToken = 0
+
+local function EnsureHook()
+    hookLoopToken += 1
+    local token = hookLoopToken
+
+    task.spawn(function()
+        while Config.SilentAim and not Hooked and hookLoopToken == token do
+            if HookProjectile() then break end
+
+            task.wait(3)
+        end
+    end)
+end
+
+-- ========== Tool / Inventory helpers ==========
+
+local function GetToolIcon(tool)
+    if not tool or not tool:IsA("Tool") then
+        return ""
+    end
+
+    local ok, texId = pcall(function()
+        return tool.TextureId
+    end)
+
+    if ok and texId and texId ~= "" then
+        return texId
+    end
+
+    local attr = tool:GetAttribute("Icon")
+        or tool:GetAttribute("IconId")
+        or tool:GetAttribute("Image")
+
+    if attr then
+        if typeof(attr) == "number" then
+            return "rbxassetid://" .. attr
+        elseif typeof(attr) == "string" and attr ~= "" then
+            return attr
+        end
+    end
+
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("Decal") or obj:IsA("Texture") then
+            if obj.Texture and obj.Texture ~= "" then
+                return obj.Texture
+            end
+        end
+    end
+
+    local handle = tool:FindFirstChild("Handle")
+
+    if handle and handle:IsA("BasePart") then
+        local texture = handle:FindFirstChildOfClass("Texture")
+
+        if texture and texture.Texture and texture.Texture ~= "" then
+            return texture.Texture
+        end
+
+        local decal = handle:FindFirstChildOfClass("Decal")
+
+        if decal and decal.Texture and decal.Texture ~= "" then
+            return decal.Texture
+        end
+    end
+
+    return ""
+end
+
+local function GetInventoryList(player, data)
+    local equipped = {}
+    local backpack = {}
+
+    if player.Character then
+        for _, child in ipairs(player.Character:GetChildren()) do
+            if child:IsA("Tool") then
+                table.insert(equipped, {
+                    Name = child.Name,
+                    Icon = GetToolIcon(child),
+                    Tool = child
+                })
+            end
+        end
+    end
+
+    local bp = player:FindFirstChild("Backpack")
+
+    if bp then
+        for _, child in ipairs(bp:GetChildren()) do
+            if child:IsA("Tool") then
+                table.insert(backpack, {
+                    Name = child.Name,
+                    Icon = GetToolIcon(child),
+                    Tool = child
+                })
+            end
+        end
+    end
+
+    if data and data.EquippedOrder then
+        table.sort(equipped, function(a, b)
+            local oa = data.EquippedOrder[a.Tool] or 0
+            local ob = data.EquippedOrder[b.Tool] or 0
+            return oa > ob
+        end)
+    end
+
+    return equipped, backpack
+end
+
+-- ========== Infinite Stamina (สเตมิน่าไม่ลด) ==========
+-- หาค่าสเตมิน่าที่เก็บในฝั่งผู้เล่น (Attribute หรือ NumberValue/IntValue ของ Player/Character)
+-- แล้วคืนค่ากลับทันทีที่เกมลดมัน ใช้ไม่ได้ถ้าเกมเก็บสเตมิน่าไว้ในตัวแปรของสคริปต์หรือเซิร์ฟเวอร์เป็นคนคุม
+
+local StaminaKeywords = {"stamina"}
+local StaminaIgnore = {"max", "regen", "drain", "cost", "rate", "delay", "cooldown", "speed", "mult", "time"}
+local StaminaEntries = setmetatable({}, {__mode = "k"})
+local StaminaToken = 0
+
+local function NameHas(name, list)
+    local lower = string.lower(name)
+
+    for _, kw in ipairs(list) do
+        if kw ~= "" and string.find(lower, kw, 1, true) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function IsStaminaName(name)
+    return NameHas(name, StaminaKeywords) and not NameHas(name, StaminaIgnore)
+end
+
+-- ค่าสูงสุดของสเตมิน่า (ถ้าเกมมี MaxStamina / StaminaMax ฯลฯ ข้างๆ)
+local function FindMaxFor(owner, name, isAttr)
+    if not owner then return nil end
+
+    local names = {"Max" .. name, name .. "Max", "Max_" .. name, name .. "_Max"}
+
+    for _, n in ipairs(names) do
+        if isAttr then
+            local v = owner:GetAttribute(n)
+
+            if typeof(v) == "number" then
+                return v
+            end
+        else
+            local child = owner:FindFirstChild(n)
+
+            if child and child:IsA("ValueBase") and typeof(child.Value) == "number" then
+                return child.Value
+            end
+        end
+    end
+
+    return nil
+end
+
+local function HookStaminaAttr(owner, name)
+    local bucket = StaminaEntries[owner]
+
+    if not bucket then
+        bucket = {}
+        StaminaEntries[owner] = bucket
+    end
+
+    if bucket[name] then return false end
+
+    local entry = {max = 0}
+    bucket[name] = entry
+
+    local function restore()
+        local v = owner:GetAttribute(name)
+        if typeof(v) ~= "number" then return end
+
+        if v > entry.max then
+            entry.max = v
+        end
+
+        local target = FindMaxFor(owner, name, true) or entry.max
+
+        if v < target then
+            owner:SetAttribute(name, target)
+        end
+    end
+
+    entry.conn = owner:GetAttributeChangedSignal(name):Connect(restore)
+    restore()
+
+    return true
+end
+
+local function HookStaminaValue(inst)
+    local bucket = StaminaEntries[inst]
+    if bucket then return false end
+
+    local entry = {max = 0}
+    StaminaEntries[inst] = {Value = entry}
+
+    local function restore()
+        local v = inst.Value
+        if typeof(v) ~= "number" then return end
+
+        if v > entry.max then
+            entry.max = v
+        end
+
+        local target = FindMaxFor(inst.Parent, inst.Name, false) or entry.max
+
+        if inst:IsA("IntValue") then
+            target = math.floor(target)
+        end
+
+        if v < target then
+            inst.Value = target
+        end
+    end
+
+    entry.conn = inst:GetPropertyChangedSignal("Value"):Connect(restore)
+    restore()
+
+    return true
+end
+
+local function ScanStaminaInstance(inst)
+    local added = 0
+
+    for name, value in pairs(inst:GetAttributes()) do
+        if typeof(value) == "number" and IsStaminaName(name) then
+            if HookStaminaAttr(inst, name) then
+                added += 1
+            end
+        end
+    end
+
+    if (inst:IsA("NumberValue") or inst:IsA("IntValue")) and IsStaminaName(inst.Name) then
+        if HookStaminaValue(inst) then
+            added += 1
+        end
+    end
+
+    return added
+end
+
+local function ForEachPlayerInstance(fn)
+    local function tree(root)
+        fn(root)
+
+        for _, d in ipairs(root:GetDescendants()) do
+            fn(d)
+        end
+    end
+
+    fn(LocalPlayer)
+
+    -- ข้าม PlayerGui (เป็นแค่ UI ไม่ใช่ตัวเก็บค่าจริง และมีของเยอะ)
+    for _, child in ipairs(LocalPlayer:GetChildren()) do
+        if not child:IsA("PlayerGui") then
+            tree(child)
+        end
+    end
+
+    if LocalPlayer.Character then
+        tree(LocalPlayer.Character)
+    end
+end
+
+local function CountStamina()
+    local n = 0
+
+    for _, bucket in pairs(StaminaEntries) do
+        for _, entry in pairs(bucket) do
+            if entry.conn and entry.conn.Connected then
+                n += 1
+            end
+        end
+    end
+
+    return n
+end
+
+local function ScanStamina()
+    ForEachPlayerInstance(ScanStaminaInstance)
+end
+
+local StaminaOnLock -- ตั้งค่าภายหลังใน UI เพื่อแจ้งเตือนเมื่อล็อกเจอ
+
+local dbg: any = debug
+
+-- ========== วิธี A: ล็อก upvalue ของฟังก์ชันที่ผูกกับปุ่มวิ่ง ==========
+-- ดัดแปลงจากสคริปต์เดิม (ล็อก upvalue ตำแหน่งที่ 6 ตายตัวที่ MobileGUI.MobileButtons.RunButton)
+-- ตอนนี้: หาปุ่มวิ่งเองแบบยืดหยุ่น + หาตำแหน่ง upvalue ของสเตมิน่าอัตโนมัติ (หรือกำหนดเองได้)
+
+local ST = {
+    max = 100,
+    index = 0, -- 0 = อัตโนมัติ
+    stats = setmetatable({}, {__mode = "k"}),
+}
+
+local function StaminaSupported()
+    return typeof(getconnections) == "function"
+        and typeof(dbg) == "table"
+        and typeof(dbg.setupvalue) == "function"
+        and (typeof(dbg.getupvalue) == "function" or typeof(dbg.getupvalues) == "function")
+end
+
+-- คืนตาราง [ตำแหน่ง] = ค่า ของ upvalue ทั้งหมดในฟังก์ชัน
+local function GetUpvalues(fn)
+    local out = {}
+
+    if typeof(dbg.getupvalues) == "function" then
+        local ok, t = pcall(dbg.getupvalues, fn)
+
+        if ok and typeof(t) == "table" then
+            for i, v in pairs(t) do
+                out[i] = v
+            end
+
+            return out
+        end
+    end
+
+    if typeof(dbg.getupvalue) == "function" then
+        for i = 1, 60 do
+            local ok, a, b = pcall(dbg.getupvalue, fn, i)
+
+            if not ok or (a == nil and b == nil) then break end
+
+            local v = a
+
+            -- executor บางตัวคืน (ชื่อ, ค่า) แบบ Lua มาตรฐาน
+            if typeof(a) == "string" and b ~= nil then
+                v = b
+            end
+
+            out[i] = v
+        end
+    end
+
+    return out
+end
+
+local function FindRunButtons()
+    local buttons, seen = {}, {}
+
+    local function add(b)
+        if b and not seen[b] and b:IsA("GuiButton") then
+            seen[b] = true
+            table.insert(buttons, b)
+        end
+    end
+
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not pg then return buttons end
+
+    -- เส้นทางเดิมของสคริปต์เพื่อน
+    local mg = pg:FindFirstChild("MobileGUI")
+    local mb = mg and mg:FindFirstChild("MobileButtons")
+    add(mb and mb:FindFirstChild("RunButton"))
+
+    -- ค้นหาแบบยืดหยุ่น: ปุ่มที่ชื่อมี run / sprint (เผื่อเกมย้ายหรือเปลี่ยนชื่อ)
+    for _, d in ipairs(pg:GetDescendants()) do
+        if d:IsA("GuiButton") then
+            local n = string.lower(d.Name)
+
+            if string.find(n, "run", 1, true) or string.find(n, "sprint", 1, true) then
+                add(d)
+            end
+        end
+
+        if #buttons >= 12 then break end
+    end
+
+    return buttons
+end
+
+local RunButtonSignals = {"MouseButton1Click", "MouseButton1Down", "Activated", "TouchTap", "MouseButton1Up"}
+
+local function CollectRunFunctions()
+    local fns, seen = {}, {}
+
+    for _, btn in ipairs(FindRunButtons()) do
+        for _, sig in ipairs(RunButtonSignals) do
+            local ok, conns = pcall(function()
+                return getconnections(btn[sig])
+            end)
+
+            if ok and typeof(conns) == "table" then
+                for _, c in ipairs(conns) do
+                    local fn = c.Function
+
+                    if typeof(fn) == "function" and not seen[fn] then
+                        seen[fn] = true
+                        table.insert(fns, fn)
+                    end
+                end
+            end
+        end
+    end
+
+    return fns
+end
+
+local function StaminaTick(fns)
+    for _, fn in ipairs(fns) do
+        local ups = GetUpvalues(fn)
+        local st = ST.stats[fn]
+
+        if not st then
+            st = {}
+            ST.stats[fn] = st
+        end
+
+        if ST.index > 0 then
+            -- กำหนดตำแหน่งเอง (เหมือนสคริปต์เดิมที่ใช้ตำแหน่ง 6)
+            local v = ups[ST.index]
+
+            if typeof(v) == "number" and v < ST.max then
+                pcall(dbg.setupvalue, fn, ST.index, ST.max)
+            end
+        else
+            for idx, v in pairs(ups) do
+                if typeof(v) == "number" then
+                    if v < 0 or v > ST.max then
+                        st[idx] = nil
+                    else
+                        local e = st[idx]
+
+                        if not e then
+                            st[idx] = {last = v, seenMax = v, changes = 0, decreases = 0, locked = false}
+                        else
+                            if v ~= e.last then
+                                e.changes += 1
+
+                                if v < e.last then
+                                    e.decreases += 1
+                                end
+
+                                e.last = v
+                            end
+
+                            if v > e.seenMax then
+                                e.seenMax = v
+                            end
+
+                            -- ตัวแปรที่ขึ้นลงในช่วง 0..max และเคยลดลง = น่าจะเป็นสเตมิน่า
+                            if not e.locked
+                                and e.changes >= 2
+                                and e.decreases >= 1
+                                and e.seenMax >= ST.max * 0.9 then
+
+                                e.locked = true
+
+                                if StaminaOnLock then
+                                    StaminaOnLock(idx)
+                                end
+                            end
+
+                            if e.locked and v < ST.max then
+                                pcall(dbg.setupvalue, fn, idx, ST.max)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function StopStamina()
+    StaminaToken += 1
+    ST.stats = setmetatable({}, {__mode = "k"})
+
+    for inst, bucket in pairs(StaminaEntries) do
+        for _, entry in pairs(bucket) do
+            if entry.conn then
+                entry.conn:Disconnect()
+            end
+        end
+
+        StaminaEntries[inst] = nil
+    end
+end
+
+-- คืน (จำนวนฟังก์ชันของปุ่มวิ่งที่พบ, จำนวนค่า Attribute/Value ที่ล็อกอยู่)
+local function StartStamina()
+    StopStamina()
+
+    local token = StaminaToken
+    local fns = {}
+
+    if StaminaSupported() then
+        local ok, res = pcall(CollectRunFunctions)
+
+        if ok then
+            fns = res
+        end
+    end
+
+    pcall(ScanStamina)
+
+    task.spawn(function()
+        local lastScan = os.clock()
+
+        while StaminaToken == token do
+            -- สแกนซ้ำทุก 2 วินาที เผื่อตัวละครเกิดใหม่ / เกมสร้างปุ่มหรือค่าทีหลัง
+            if os.clock() - lastScan >= 2 then
+                lastScan = os.clock()
+                pcall(ScanStamina)
+
+                if StaminaSupported() then
+                    local ok, res = pcall(CollectRunFunctions)
+
+                    if ok then
+                        fns = res
+                    end
+                end
+            end
+
+            if #fns > 0 then
+                pcall(StaminaTick, fns)
+            end
+
+            task.wait(0.05)
+        end
+    end)
+
+    return #fns, CountStamina()
+end
+
+-- ========== Auto Farm (ฟาร์มงานอัตโนมัติ) ==========
+-- พอร์ตมาจากสคริปต์ NEXUS X HUB (แมพ "สายเลือดอาชีวะ")
+-- เดินล้วนด้วย Pathfinding: ไม่วาร์ป ไม่ทะลุกำแพง ไม่เร่งความเร็ว + เล่นมินิเกม/ขายของให้อัตโนมัติ
+-- ใช้ได้เฉพาะแมพที่มีโฟลเดอร์ Workspace.Job.* และ UI ชื่อเดียวกับแมพนั้น
+local FarmAPI = {}
+
+do
+    local UserInputService = game:GetService("UserInputService")
+    local PathfindingService = game:GetService("PathfindingService")
+    local VIM
+    pcall(function() VIM = game:GetService("VirtualInputManager") end)
+
+    local notifyFn
+    local function notify(title, content, icon, dur)
+        if notifyFn then
+            notifyFn(title, content, icon, dur)
+        end
+    end
+
+    local function getHum()
+        local c = LocalPlayer.Character
+        return c and c:FindFirstChildOfClass("Humanoid")
+    end
+
+    local function getRoot()
+        local c = LocalPlayer.Character
+        return c and c:FindFirstChild("HumanoidRootPart")
+    end
+
+    local Farm = {
+        On = false, Job = "ทำความสะอาด", Delay = 0.6, Visited = {}, Count = 0,
+        Skip = {}, Fail = {}, Log = {}, SnapPts = {},
+        Snaps = 0, Pulls = 0, ConsecFail = 0,
+        Range = 250, ManualWalk = false,
+        Phase = "idle", Target = nil, TripStart = nil, Started = 0, IgnoreUntil = 0,
+        AutoMiniGame = true, AutoSell = true, Sprint = true, AvoidWalls = true,
+        Rest = 5, PendingRest = false,
+    }
+
+    local FARM_JOBS = {
+        ["ทำความสะอาด"] = { path = { "Job", "ทำความสะอาด" } },
+        ["เก็บขยะ + ขาย"] = { path = { "Job", "ขยะ" }, sellEvery = 5 },
+        ["งานก่อสร้าง"] = { path = { "Job", "งานก่อสร้าง" }, collectEvery = 8,
+            collect = { gui = "ConstructionUI", btn = { "MainFrame", "WorkPage", "BtnRow", "CollectBtn" } } },
+        ["ซ่อมรถ"] = { path = { "Job", "ซ่อมรถ" }, collectEvery = 8,
+            collect = { gui = "mechanicUI", btn = { "MainFrame", "WorkPage", "BtnRow", "CollectBtn" } } },
+    }
+
+    local function farmFolder(job)
+        local f = Workspace
+
+        for _, n in ipairs(FARM_JOBS[job].path) do
+            f = f and f:FindFirstChild(n)
+        end
+
+        return f
+    end
+
+    local function promptPos(d)
+        local par = d.Parent
+
+        if par and par:IsA("BasePart") then return par.Position end
+        if par and par:IsA("Attachment") then return par.WorldPosition end
+
+        local part = d:FindFirstAncestorWhichIsA("BasePart")
+        return part and part.Position
+    end
+
+    -- หา ProximityPrompt ที่ใกล้ที่สุด kind: "site" = จุดงาน | "npc" = NPC | "sell" = จุดขาย
+    local function farmNearest(folder, kind, range)
+        local root = getRoot()
+        if not (folder and root) then return end
+
+        local best, bestD
+
+        for _, d in ipairs(folder:GetDescendants()) do
+            if d:IsA("ProximityPrompt") and d.Enabled then
+                local full = d:GetFullName()
+                local isNPC = full:find(".NPC.", 1, true) ~= nil
+                local isSell = full:find(".NPC.Sell", 1, true) ~= nil
+                local ok = (kind == "site" and not isNPC) or (kind == "npc" and isNPC) or (kind == "sell" and isSell)
+                local vis = Farm.Visited[d]
+                local skp = Farm.Skip[d]
+
+                if ok and not (vis and os.clock() - vis < 6) and not (skp and os.clock() < skp) then
+                    local pos = promptPos(d)
+
+                    if pos then
+                        local dist = (pos - root.Position).Magnitude
+
+                        if (not range or dist <= range) and (not bestD or dist < bestD) then
+                            best, bestD = d, dist
+                        end
+                    end
+                end
+            end
+        end
+
+        return best
+    end
+
+    local function fmtV(v)
+        if not v then return "nil" end
+        return string.format("(%.0f, %.0f, %.0f)", v.X, v.Y, v.Z)
+    end
+
+    local function farmLog(kind, info)
+        local t = Farm.Started > 0 and (os.clock() - Farm.Started) or 0
+        local line = string.format("[%6.1fs] %s | %s | %s", t, kind, Farm.Phase, info or "")
+
+        Farm.Log[#Farm.Log + 1] = line
+
+        if #Farm.Log > 80 then
+            table.remove(Farm.Log, 1)
+        end
+
+        -- แสดงใน Console (F9) ไว้ตามดูว่าแต่ละขั้นทำงานหรือพังตรงไหน
+        print("[Flexozy Farm] " .. line)
+    end
+
+    -- ตรวจจับการโดนดึงกลับ (ตำแหน่งกระโดดผิดปกติ)
+    local farmMon
+
+    local function farmMonitorStop()
+        if farmMon then
+            farmMon:Disconnect()
+            farmMon = nil
+        end
+    end
+
+    local function farmMonitorStart()
+        farmMonitorStop()
+        local last
+
+        farmMon = RunService.Heartbeat:Connect(function()
+            local r = getRoot()
+
+            if not r then
+                last = nil
+                return
+            end
+
+            local p = r.Position
+
+            if last and os.clock() > Farm.IgnoreUntil then
+                local jump = (p - last).Magnitude
+
+                if jump > 25 then
+                    Farm.Snaps = Farm.Snaps + 1
+
+                    if #Farm.SnapPts < 200 then
+                        Farm.SnapPts[#Farm.SnapPts + 1] = p
+                    end
+
+                    local tgt = Farm.Target and promptPos(Farm.Target)
+                    local home = Farm.TripStart and (p - Farm.TripStart).Magnitude < 15
+
+                    farmLog("SNAP", string.format("%s -> %s | jump=%.0f | เป้าหมาย=%s | %s",
+                        fmtV(last), fmtV(p), jump, fmtV(tgt), home and "กลับจุดเริ่มต้นของทริป" or "ไปที่อื่น"))
+                end
+            end
+
+            last = p
+        end)
+    end
+
+    local function farmFailed(d, why, tries)
+        Farm.Fail[d] = tries + 1
+        Farm.Pulls = Farm.Pulls + 1
+        Farm.Skip[d] = os.clock() + math.min(10 * (tries + 1), 40)
+        farmLog("FAIL", why .. " | ครั้งที่ " .. (tries + 1) .. " | " .. d:GetFullName())
+        Farm.Phase = "idle"
+
+        return false
+    end
+
+    local function farmActive()
+        return Farm.On or Farm.ManualWalk
+    end
+
+    -- กด/ปล่อย Shift ให้เหมือนเรากดวิ่งเอง (ใช้ตอนเดินไปจุดงานเท่านั้น)
+    local sprinting = false
+
+    local function setSprint(on)
+        if on and not Farm.Sprint then
+            on = false
+        end
+
+        if on == sprinting then return end
+        sprinting = on
+
+        local ok = false
+
+        if VIM then
+            ok = pcall(function()
+                VIM:SendKeyEvent(on, Enum.KeyCode.LeftShift, false, game)
+            end)
+        end
+
+        if not ok then
+            -- วิธีสำรอง: คีย์บอร์ดจำลองของ executor (0x10 = Shift)
+            if on and keypress then
+                pcall(keypress, 0x10)
+            elseif not on and keyrelease then
+                pcall(keyrelease, 0x10)
+            end
+        end
+    end
+
+    -- ===== เดินด้วย Pathfinding (เหมือนสคริปต์ต้นฉบับ) =====
+    -- Pathfinding คำนวณเส้นทางบน navmesh จึงอ้อมกำแพงให้อยู่แล้ว
+    -- เพิ่มเฉพาะ: ถ้าติดจริง (แทบไม่ขยับ) จะกระโดดแล้วคำนวณเส้นทางใหม่จากตำแหน่งปัจจุบัน (เปิด/ปิดด้วย "หลบกำแพง")
+    local function farmWalkInner(pos, stop)
+        stop = stop or 4
+        local hum, root = getHum(), getRoot()
+        if not (hum and root) then return false end
+
+        local t0 = os.clock()
+        local limit = (pos - root.Position).Magnitude / math.max(hum.WalkSpeed, 12) * 2.5 + 10
+
+        while farmActive() and hum.WalkSpeed <= 0 and os.clock() - t0 < 8 do
+            task.wait(0.2)
+        end
+
+        local snaps0 = Farm.Snaps
+
+        local function flatDist()
+            local r = getRoot()
+            return r and Vector3.new(pos.X - r.Position.X, 0, pos.Z - r.Position.Z).Magnitude or math.huge
+        end
+
+        local function alive()
+            return farmActive() and getHum() and getRoot() and Farm.Snaps == snaps0 and os.clock() - t0 < limit
+        end
+
+        local attempts = 0
+
+        while alive() and flatDist() > stop and attempts < 3 do
+            attempts += 1
+
+            local waypoints
+            local okp, path = pcall(function()
+                local pth = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
+                pth:ComputeAsync(getRoot().Position, pos)
+                return pth
+            end)
+
+            if okp and path and path.Status == Enum.PathStatus.Success then
+                waypoints = path:GetWaypoints()
+            end
+
+            local repath = false
+
+            if waypoints then
+                for _, wp in ipairs(waypoints) do
+                    if not alive() or flatDist() <= stop then break end
+
+                    local h = getHum()
+
+                    if wp.Action == Enum.PathWaypointAction.Jump then
+                        h.Jump = true
+                    end
+
+                    h:MoveTo(wp.Position)
+
+                    local t1 = os.clock()
+                    local lastPos = getRoot().Position
+                    local lastMove = os.clock()
+
+                    while alive() and flatDist() > stop and os.clock() - t1 < 4
+                        and Vector3.new(wp.Position.X - getRoot().Position.X, 0, wp.Position.Z - getRoot().Position.Z).Magnitude > 3 do
+                        task.wait(0.1)
+
+                        local r = getRoot()
+
+                        if r and (r.Position - lastPos).Magnitude > 1 then
+                            lastPos = r.Position
+                            lastMove = os.clock()
+                        elseif Farm.AvoidWalls and os.clock() - lastMove > 1.5 then
+                            -- ติดจริง: กระโดดแล้วไปคำนวณเส้นทางใหม่
+                            local hh = getHum()
+
+                            if hh then
+                                hh.Jump = true
+                            end
+
+                            repath = true
+                            break
+                        end
+                    end
+
+                    if repath then break end
+                end
+            end
+
+            if not repath then break end
+        end
+
+        local lastMove = 0
+
+        while alive() and flatDist() > stop do
+            if os.clock() - lastMove > 1 then
+                getHum():MoveTo(pos)
+                lastMove = os.clock()
+            end
+
+            task.wait(0.1)
+        end
+
+        return flatDist() <= stop + 2
+    end
+
+    -- ครอบด้วย pcall เพื่อให้ปล่อย Shift เสมอ แม้ระหว่างเดินเกิด error
+    local function farmWalk(pos, stop)
+        setSprint(true)
+
+        local ok, res = pcall(farmWalkInner, pos, stop)
+
+        setSprint(false)
+
+        if not ok then
+            warn("[Flexozy Farm] เดินผิดพลาด: " .. tostring(res))
+            return false
+        end
+
+        return res
+    end
+
+    local function miniGameOpen()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        local g = pg and pg:FindFirstChild("MiniGameUI")
+
+        return g ~= nil and g.Enabled
+    end
+
+    -- เดินไปหาจุดแล้วกด ProximityPrompt
+    local function farmUse(d)
+        local pos = promptPos(d)
+        local root = getRoot()
+        if not (pos and root) then return false end
+
+        local start = root.Position
+        local maxDist = math.max(tonumber(d.MaxActivationDistance) or 10, 8)
+        local tries = Farm.Fail[d] or 0
+
+        Farm.Target, Farm.TripStart = d, start
+        Farm.Phase = "walk"
+
+        local stopAt = math.max(maxDist - 4, 4)
+        local flat = Vector3.new(pos.X - start.X, 0, pos.Z - start.Z).Magnitude
+
+        if flat > stopAt then
+            farmLog("WALK", string.format("เดินจาก %s ไป %s | ระยะ=%.0f", fmtV(start), fmtV(pos), (pos - start).Magnitude))
+            farmWalk(pos, stopAt)
+        end
+
+        root = getRoot()
+
+        if not root then
+            Farm.Phase = "idle"
+            return false
+        end
+
+        local here = root.Position
+        local dist3 = (pos - here).Magnitude
+
+        if dist3 > maxDist + 6 then
+            return farmFailed(d, string.format("เดินไปไม่ถึง (ห่าง %.0f อยู่ที่ %s)", dist3, fmtV(here)), tries)
+        end
+
+        Farm.Phase = "action"
+        Farm.Visited[d] = os.clock()
+        farmLog("PRESS", string.format("กดงาน %s | hold=%.1f", d:GetFullName(), math.max(d.HoldDuration, 0)))
+
+        local hold = math.max(d.HoldDuration, 0)
+        local total = hold + Farm.Delay
+
+        if fireproximityprompt then
+            pcall(fireproximityprompt, d)
+        else
+            pcall(function() d:InputHoldBegin() end)
+            total = total + math.max(hold, 0.1) + 0.1
+        end
+
+        local t0, pulled = os.clock(), false
+
+        while os.clock() - t0 < total and Farm.On do
+            local r = getRoot()
+
+            if r and (r.Position - here).Magnitude >= 40 then
+                pulled = true
+                break
+            end
+
+            task.wait(0.05)
+        end
+
+        if not fireproximityprompt then
+            pcall(function() d:InputHoldEnd() end)
+        end
+
+        if pulled then
+            local r = getRoot()
+            return farmFailed(d, "โดนดึงกลับระหว่างทำงาน (อยู่ที่ " .. fmtV(r and r.Position) .. ")", tries)
+        end
+
+        Farm.Fail[d] = 0
+        Farm.Phase = "idle"
+
+        return true
+    end
+
+    -- ===== ตัวช่วย GUI / อินพุต =====
+
+    local function farmGui(name)
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        return pg and pg:FindFirstChild(name)
+    end
+
+    local function farmFindPath(root, path)
+        local o = root
+
+        for _, n in ipairs(path) do
+            o = o and o:FindFirstChild(n)
+        end
+
+        return o
+    end
+
+    local function farmWaitGuiClosed(name, timeout)
+        local t0 = os.clock()
+        local g = farmGui(name)
+
+        while Farm.On and g and g.Enabled and os.clock() - t0 < (timeout or 90) do
+            task.wait(0.5)
+        end
+    end
+
+    -- กดปุ่มด้วย firesignal (ถ้ามี) ไม่งั้นใช้วิธีสำรอง
+    local function fsig(btn)
+        if firesignal then
+            pcall(firesignal, btn.MouseButton1Click)
+            pcall(firesignal, btn.MouseButton1Down)
+            pcall(firesignal, btn.MouseButton1Up)
+            return
+        end
+
+        local det = btn:FindFirstChildOfClass("ClickDetector")
+
+        if det and fireclickdetector then
+            pcall(fireclickdetector, det)
+            return
+        end
+
+        pcall(function() btn:Activate() end)
+    end
+
+    local function centerOf(gui)
+        return gui.AbsolutePosition + gui.AbsoluteSize * 0.5
+    end
+
+    local function moveMouseTo(x, y)
+        local tx, ty = x, y
+
+        for _ = 1, 4 do
+            local sent = false
+
+            if VIM then
+                sent = pcall(function() VIM:SendMouseMoveEvent(tx, ty, game) end)
+            end
+
+            if not sent and mousemoveabs then
+                pcall(mousemoveabs, tx, ty)
+            end
+
+            task.wait(0.06)
+
+            local loc = UserInputService:GetMouseLocation()
+            local dx, dy = x - loc.X, y - loc.Y
+
+            if math.abs(dx) < 4 and math.abs(dy) < 4 then
+                return true, tx - x, ty - y
+            end
+
+            tx, ty = tx + dx, ty + dy
+        end
+
+        return false, tx - x, ty - y
+    end
+
+    local function sendMove(x, y)
+        local sent = false
+
+        if VIM then
+            sent = pcall(function() VIM:SendMouseMoveEvent(x, y, game) end)
+        end
+
+        if not sent and mousemoveabs then
+            pcall(mousemoveabs, x, y)
+        end
+    end
+
+    local function mouseHold(down)
+        local loc = UserInputService:GetMouseLocation()
+
+        if VIM then
+            pcall(function() VIM:SendMouseButtonEvent(loc.X, loc.Y, 0, down, game, 0) end)
+        end
+
+        if down then
+            if mouse1press then pcall(mouse1press) end
+        else
+            if mouse1release then pcall(mouse1release) end
+        end
+    end
+
+    local function clickBtn(btn)
+        if firesignal then
+            pcall(firesignal, btn.MouseButton1Click)
+            return
+        end
+
+        if getconnections then
+            pcall(function()
+                for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
+                    c:Fire()
+                end
+            end)
+            return
+        end
+
+        pcall(function() btn:Activate() end)
+    end
+
+    local function mgAlive(g, frame)
+        return Farm.On and g and g.Enabled and frame and frame.Visible
+    end
+
+    -- ===== มินิเกมอัตโนมัติ =====
+
+    local function isLit(btn)
+        local c = btn.BackgroundColor3
+        return c.R > 0.85 and c.G > 0.7 and c.B < 0.4
+    end
+
+    local function solveNail(g)
+        local frame = g:FindFirstChild("NailFrame")
+        if not (frame and frame.Visible) then return false end
+
+        notify("มินิเกม", "🔨 ตอกตะปู — กำลังทำอัตโนมัติ", "zap", 2)
+
+        local t0 = os.clock()
+
+        while mgAlive(g, frame) and os.clock() - t0 < 45 do
+            local hit = false
+
+            for i = 1, 4 do
+                local btn = frame:FindFirstChild("NailBtn" .. i)
+
+                if btn and isLit(btn) then
+                    task.wait(0.1)
+
+                    if isLit(btn) then
+                        clickBtn(btn)
+                        hit = true
+                        task.wait(0.45)
+                        break
+                    end
+                end
+            end
+
+            if not hit then
+                task.wait(0.05)
+            end
+        end
+
+        return true
+    end
+
+    local function solveHold(g, frameName, btnName, label)
+        local frame = g:FindFirstChild(frameName)
+        if not (frame and frame.Visible) then return false end
+
+        notify("มินิเกม", label .. " — กดเมาส์ค้างอัตโนมัติ (~8 วิ)", "zap", 3)
+
+        local btn = frame:FindFirstChild(btnName)
+
+        if btn then
+            local c = centerOf(btn)
+            moveMouseTo(c.X, c.Y)
+        end
+
+        mouseHold(true)
+
+        local t0, lastPress = os.clock(), os.clock()
+
+        while mgAlive(g, frame) and os.clock() - t0 < 30 do
+            if os.clock() - lastPress > 1 and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                mouseHold(true)
+                lastPress = os.clock()
+            end
+
+            task.wait(0.1)
+        end
+
+        mouseHold(false)
+
+        return true
+    end
+
+    local function solveSweep(g, frameName)
+        local frame = g:FindFirstChild(frameName)
+        if not (frame and frame.Visible) then return false end
+
+        local floorBg = frame:FindFirstChild("FloorBg")
+        if not floorBg then return true end
+
+        notify("มินิเกม", "🧹 กวาดพื้น — กำลังทำอัตโนมัติ", "zap", 2)
+
+        local catcher = floorBg:FindFirstChild("_InputCatcher")
+        local w0 = os.clock()
+
+        while not catcher and os.clock() - w0 < 2 do
+            task.wait(0.1)
+            catcher = floorBg:FindFirstChild("_InputCatcher")
+        end
+
+        local ctr = centerOf(floorBg)
+        local sz = floorBg.AbsoluteSize
+        local _, ox, oy = moveMouseTo(ctr.X, ctr.Y)
+
+        local usedSignal = false
+
+        if catcher and firesignal then
+            pcall(firesignal, catcher.MouseButton1Down)
+            usedSignal = true
+        else
+            mouseHold(true)
+        end
+
+        local rx, ry = sz.X * 0.3, sz.Y * 0.3
+        local ang, t0 = 0, os.clock()
+
+        while mgAlive(g, frame) and os.clock() - t0 < 40 do
+            ang = ang + 0.25
+            sendMove(ctr.X + math.cos(ang) * rx + ox, ctr.Y + math.sin(ang) * ry + oy)
+            task.wait()
+        end
+
+        if usedSignal then
+            pcall(firesignal, catcher.MouseButton1Up)
+        else
+            mouseHold(false)
+        end
+
+        return true
+    end
+
+    local function boltDone(btn)
+        local fillBg = btn:FindFirstChild("FillBg")
+        local fill = fillBg and fillBg:FindFirstChild("Fill")
+        return fill and fill.Size.X.Scale >= 0.99
+    end
+
+    local function solveWheel(g)
+        local frame = g:FindFirstChild("WheelFrame")
+        if not (frame and frame.Visible) then return false end
+
+        notify("มินิเกม", "🔩 ขันน็อต — กำลังทำอัตโนมัติ", "zap", 2)
+
+        local t0 = os.clock()
+
+        if firesignal then
+            while mgAlive(g, frame) and os.clock() - t0 < 30 do
+                for i = 1, 4 do
+                    local btn = frame:FindFirstChild("BoltBtn" .. i)
+
+                    if btn and not boltDone(btn) then
+                        pcall(firesignal, btn.MouseButton1Down)
+                    end
+                end
+
+                task.wait(0.25)
+            end
+        else
+            for i = 1, 4 do
+                local btn = frame:FindFirstChild("BoltBtn" .. i)
+
+                if btn and mgAlive(g, frame) then
+                    local c = centerOf(btn)
+                    moveMouseTo(c.X, c.Y)
+                    mouseHold(true)
+
+                    local t1 = os.clock()
+
+                    while mgAlive(g, frame) and not boltDone(btn) and os.clock() - t1 < 6 do
+                        task.wait(0.1)
+                    end
+
+                    mouseHold(false)
+                    task.wait(0.1)
+                end
+            end
+        end
+
+        return true
+    end
+
+    local function solveTrash(g)
+        local frame = g:FindFirstChild("TrashFrame")
+        if not (frame and frame.Visible) then return false end
+
+        local dark = frame:FindFirstChild("DarkBox")
+        local catcher = dark and dark:FindFirstChild("InputCatcher")
+        if not (dark and catcher) then return true end
+
+        notify("มินิเกม", "🔦 ขุดขยะ — กำลังทำอัตโนมัติ (ใช้เวลาราว 8 วิ/จุด)", "zap", 3)
+        task.wait(0.35)
+
+        local function targets()
+            local list = {}
+
+            for _, c in ipairs(dark:GetChildren()) do
+                if c.Name == "Target" and c:IsA("GuiObject") then
+                    list[#list + 1] = c
+                end
+            end
+
+            return list
+        end
+
+        local function isFound(t)
+            local ic = t:FindFirstChild("Icon")
+            return ic ~= nil and ic.ImageColor3.R < 0.7
+        end
+
+        local t0 = os.clock()
+
+        while mgAlive(g, frame) and os.clock() - t0 < 110 do
+            local pending
+
+            for _, t in ipairs(targets()) do
+                if not isFound(t) then
+                    pending = t
+                    break
+                end
+            end
+
+            if not pending then break end
+
+            local c = centerOf(pending)
+            moveMouseTo(c.X, c.Y)
+
+            if firesignal then
+                pcall(firesignal, catcher.MouseButton1Down)
+            else
+                mouseHold(true)
+            end
+
+            local t1 = os.clock()
+
+            while mgAlive(g, frame) and not isFound(pending) and os.clock() - t1 < 13 do
+                task.wait(0.1)
+            end
+
+            if firesignal then
+                pcall(firesignal, catcher.MouseButton1Up)
+            else
+                mouseHold(false)
+            end
+
+            task.wait(0.15)
+        end
+
+        return true
+    end
+
+    local function autoSolveMiniGame(g)
+        -- GUI เปิดก่อนแต่เฟรมของมินิเกมอาจโผล่ช้ากว่าเล็กน้อย: ลองซ้ำจนกว่าจะเจอชนิดที่รองรับ (ไม่ต้องยืนรอ)
+        local t0 = os.clock()
+
+        while Farm.On and g.Enabled and os.clock() - t0 < 2.5 do
+            if solveNail(g) then return end
+            if solveHold(g, "WeldFrame", "WeldBtn", "🔥 เชื่อมโลหะ") then return end
+            if solveHold(g, "DrillFrame", "DrillBtn", "⚙️ เจาะพื้น") then return end
+            if solveSweep(g, "SweepFrame") then return end
+            if solveSweep(g, "Sweep") then return end
+            if solveWheel(g) then return end
+            if solveTrash(g) then return end
+
+            task.wait(0.1)
+        end
+
+        notify("มินิเกมนี้ยังไม่รองรับ", "ทำเองได้เลย ฟาร์มจะรอจนมินิเกมปิด", "triangle-alert", 4)
+    end
+
+    -- คืน true ถ้ามีมินิเกมเปิดอยู่และรอจนปิดแล้ว
+    local function farmWaitMiniGame()
+        local g = farmGui("MiniGameUI")
+        if not (g and g.Enabled) then return false end
+
+        if Farm.AutoMiniGame then
+            task.spawn(function()
+                autoSolveMiniGame(g)
+            end)
+        end
+
+        local t0 = os.clock()
+
+        while Farm.On and g and g.Enabled and os.clock() - t0 < 130 do
+            task.wait(0.1)
+        end
+
+        task.wait(0.15)
+
+        return true
+    end
+
+    -- ===== ขายของ / รับเงิน =====
+
+    local function autoSell(g)
+        local frame = g:FindFirstChild("Frame")
+        if not frame then return end
+
+        local inv = frame:FindFirstChild("invantory")
+        local itemsScroll = inv and inv:FindFirstChild("Items")
+        if not itemsScroll then return end
+
+        local clicked = 0
+
+        for _, child in ipairs(itemsScroll:GetChildren()) do
+            if child:IsA("ImageLabel") and child.Visible then
+                local cc = child:FindFirstChild("ClickCatcher")
+
+                if cc then
+                    fsig(cc)
+                    clicked = clicked + 1
+                    task.wait(0.06)
+                end
+            end
+        end
+
+        if clicked == 0 then return end
+
+        task.wait(0.3)
+
+        local sellSection = frame:FindFirstChild("Sell")
+
+        if sellSection then
+            local sellBtn = sellSection:FindFirstChildOfClass("TextButton")
+
+            if sellBtn then
+                fsig(sellBtn)
+                task.wait(0.5)
+            end
+        end
+    end
+
+    local function farmWaitSell()
+        task.wait(0.8)
+
+        local g = farmGui("Shopsell")
+        if not (g and g.Enabled) then return end
+
+        if Farm.AutoSell then
+            notify("ขายของอัตโนมัติ", "กำลังเลือกของและกดขายให้...", "coins", 3)
+            autoSell(g)
+            task.wait(1)
+
+            local frame = g:FindFirstChild("Frame")
+            local closeBtn = frame and frame:FindFirstChild("Close")
+
+            if closeBtn then
+                fsig(closeBtn)
+            end
+
+            task.wait(0.5)
+        else
+            notify("ขายของเอง", "เลือกของแล้วกดขาย แล้วปิดหน้าต่าง ฟาร์มจะทำต่อเอง", "coins", 5)
+            farmWaitGuiClosed("Shopsell", 120)
+        end
+    end
+
+    local function farmCollect(job)
+        local c = job.collect
+        local d = farmNearest(farmFolder(Farm.Job), "npc")
+
+        if not d then
+            notify("ไม่พบ NPC งาน", "เดินเข้าใกล้โซนงานแล้วลองใหม่", "triangle-alert", 3)
+            return false
+        end
+
+        if not farmUse(d) then return false end
+
+        local t0 = os.clock()
+        local g
+
+        repeat
+            task.wait(0.3)
+            g = farmGui(c.gui)
+        until (g and g.Enabled) or os.clock() - t0 > 6 or not Farm.On
+
+        if not (g and g.Enabled) then
+            notify("เปิดหน้างานไม่ได้", "คุยกับ NPC ด้วยตัวเองแล้วกด Collect", "triangle-alert", 4)
+            return false
+        end
+
+        local wp = farmFindPath(g, { "MainFrame", "WorkPage" })
+        local btn = farmFindPath(g, c.btn)
+        local closeB = farmFindPath(g, { "MainFrame", "Header", "CloseBtn" })
+
+        if wp and not wp.Visible then
+            notify("ยังไม่ได้รับงาน", "คุยกับ NPC แล้วกด 'จ้าง' ก่อน แล้วค่อยเปิดฟาร์ม", "triangle-alert", 5)
+
+            if closeB and firesignal then
+                pcall(firesignal, closeB.MouseButton1Click)
+            end
+
+            return false
+        end
+
+        if btn and firesignal then
+            pcall(firesignal, btn.MouseButton1Click)
+            task.wait(0.6)
+
+            if closeB then
+                pcall(firesignal, closeB.MouseButton1Click)
+            end
+
+            return true
+        end
+
+        notify("กดรับเงินเอง", "ตัวรันไม่มี firesignal — กด Collect แล้วปิดหน้าต่าง ฟาร์มจะทำต่อเอง", "triangle-alert", 5)
+        farmWaitGuiClosed(c.gui, 90)
+
+        return true
+    end
+
+    -- สั่งให้ตัวละครหยุดเดิน/วิ่งและยืนอยู่กับที่
+    local function standStill()
+        local h, r = getHum(), getRoot()
+
+        if h and r then
+            pcall(function()
+                h:MoveTo(r.Position)
+            end)
+        end
+    end
+
+    -- พักสั้นๆ หลังเสร็จงาน (หยุดทันทีถ้าปิดฟาร์ม)
+    local function restWait(sec)
+        local t0 = os.clock()
+
+        while Farm.On and os.clock() - t0 < sec do
+            task.wait(0.1)
+        end
+    end
+
+    -- ===== ลูปหลัก =====
+
+    local function farmLoop()
+        -- เดินไปรับงานจาก NPC ก่อน
+        do
+            local npcD = farmNearest(farmFolder(Farm.Job), "npc")
+
+            if npcD then
+                local pos = promptPos(npcD)
+
+                if pos then
+                    notify("เริ่มฟาร์ม", "กำลังเดินหา NPC รับงานก่อน...", "navigation", 3)
+                    Farm.ManualWalk = true
+                    farmWalk(pos, 6)
+                    Farm.ManualWalk = false
+
+                    farmUse(npcD)
+                    task.wait(1)
+                end
+            else
+                notify("ไม่พบ NPC", "หาจุดงานเลยเพราะไม่มี NPC ในระยะ " .. Farm.Range .. " สตัด", "triangle-alert", 3)
+            end
+        end
+
+        local lastWarn, lastPullWarn = 0, 0
+
+        while Farm.On do
+            if not getRoot() then
+                task.wait(1)
+            else
+                local played = farmWaitMiniGame()
+
+                if played then
+                    farmLog("GAME", "มินิเกมจบแล้ว")
+                end
+
+                -- เสร็จงานแล้ว: พักสักครู่ค่อยวิ่งไปทำงานต่อ
+                -- ระหว่างพักถ้ามินิเกมเพิ่งเปิดจะเล่นทันที (ไม่ยืนรอ) แล้วค่อยพักหลังเล่นจบ
+                if Farm.PendingRest then
+                    Farm.PendingRest = false
+
+                    -- เสร็จงานแล้ว: ยืนนิ่งๆ ก่อน ยังไม่เดินไปรับงานถัดไป
+                    standStill()
+                    farmLog("REST", string.format("ยืนรอ %.1f วินาที", Farm.Rest))
+
+                    if not played then
+                        local t0 = os.clock()
+
+                        while Farm.On and os.clock() - t0 < Farm.Rest do
+                            if miniGameOpen() then
+                                played = farmWaitMiniGame() or played
+                                break
+                            end
+
+                            task.wait(0.1)
+                        end
+                    end
+
+                    if played then
+                        standStill()
+                        restWait(Farm.Rest)
+                    end
+                end
+
+                local job = FARM_JOBS[Farm.Job]
+                local folder = farmFolder(Farm.Job)
+                local d
+
+                if job.sellEvery and Farm.Count >= job.sellEvery then
+                    d = farmNearest(folder, "sell", Farm.Range)
+
+                    if d and farmUse(d) then
+                        Farm.Count = 0
+                        farmWaitSell()
+                        Farm.PendingRest = true
+                    end
+
+                    if not d then
+                        Farm.Count = 0
+                    end
+                elseif job.collectEvery and Farm.Count >= job.collectEvery then
+                    if farmCollect(job) then
+                        Farm.PendingRest = true
+                    end
+
+                    Farm.Count = 0
+                else
+                    d = folder and farmNearest(folder, "site", Farm.Range)
+
+                    if d then
+                        if farmUse(d) then
+                            Farm.Count = Farm.Count + 1
+                            Farm.ConsecFail = 0
+                            Farm.PendingRest = true
+                        else
+                            Farm.ConsecFail = Farm.ConsecFail + 1
+
+                            if Farm.ConsecFail >= 3 and os.clock() - lastPullWarn > 15 then
+                                lastPullWarn = os.clock()
+                                notify("โดนดึงกลับบ่อย", "ฟาร์มจะข้ามจุดที่มีปัญหาชั่วคราว", "triangle-alert", 5)
+                            end
+                        end
+                    elseif os.clock() - lastWarn > 12 then
+                        lastWarn = os.clock()
+                        notify("ไม่พบจุดงานในระยะ " .. Farm.Range .. " สตัด", "เดินเข้าใกล้โซนงาน (หรือจุดถูกข้ามชั่วคราว)", "triangle-alert", 4)
+                    end
+                end
+
+                task.wait(Farm.PendingRest and 0.05 or math.min(0.2 + Farm.ConsecFail * 0.3, 3))
+            end
+        end
+
+        Farm.Phase = "idle"
+    end
+
+    -- ===== ส่วนที่ UI เรียกใช้ =====
+
+    FarmAPI.Farm = Farm
+
+    FarmAPI.JobNames = {}
+
+    for k in pairs(FARM_JOBS) do
+        table.insert(FarmAPI.JobNames, k)
+    end
+
+    table.sort(FarmAPI.JobNames)
+
+    function FarmAPI.SetNotify(fn)
+        notifyFn = fn
+    end
+
+    function FarmAPI.SetJob(name)
+        if FARM_JOBS[name] then
+            Farm.Job = name
+            Farm.Visited, Farm.Skip, Farm.Fail = {}, {}, {}
+            Farm.Count = 0
+        end
+    end
+
+    function FarmAPI.StopSprint()
+        setSprint(false)
+    end
+
+    function FarmAPI.Start()
+        if Farm.On then return end
+
+        Farm.On = true
+
+        if not fireproximityprompt then
+            notify("ตัวรันไม่รองรับ", "ไม่มี fireproximityprompt จะใช้วิธีสำรองแทน", "triangle-alert", 3)
+        end
+
+        Farm.Visited, Farm.Skip, Farm.Fail = {}, {}, {}
+        Farm.ConsecFail = 0
+        Farm.PendingRest = false
+        Farm.Started = os.clock()
+        farmMonitorStart()
+        task.spawn(farmLoop)
+    end
+
+    function FarmAPI.Stop()
+        Farm.On = false
+        Farm.ManualWalk = false
+        farmMonitorStop()
+        setSprint(false)
+
+        -- สั่งหยุดเดิน
+        local hum = getHum()
+        local root = getRoot()
+
+        if hum and root then
+            pcall(function() hum:MoveTo(root.Position) end)
+        end
+    end
+end
+
+-- ========== ESP System (ระบบใหม่) ==========
+
+-- ESPHolder = ที่แสดง ESP ทั้งหมด (แต่ละส่วนสั่ง Visible ตามสวิตช์ทุกเฟรม ไม่มีการย้ายไปมา)
+local ESPHolder = Instance.new("ScreenGui")
+ESPHolder.Name = "\000"
+ESPHolder.IgnoreGuiInset = true
+ESPHolder.ResetOnSpawn = false
+ESPHolder.Enabled = true
+ProtectParent(ESPHolder)
+
+local skeletonR15 = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"},
+}
+
+local skeletonR6 = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"},
+}
+
+local function GetSkeletonPairs(char)
+    if char:FindFirstChild("UpperTorso") then
+        return skeletonR15
+    end
+
+    return skeletonR6
+end
+
+-- แปลงตำแหน่งโลก -> พิกัดหน้าจอสำหรับ Drawing (ไม่ตัดทิ้งเมื่ออยู่นอกจอ ขอแค่อยู่หน้ากล้อง)
+local function project(pos)
+    local v = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(v.X, v.Y), v.Z > 0
+end
+
+local TracerOrigins = {
+    ["ตัวเรา"] = "Self",
+    ["บนกลางจอ"] = "Top",
+    ["ล่างกลางจอ"] = "Bottom",
+    ["กลางจอ"] = "Center",
+}
+
+local ESPFont = Font.new(
+    "rbxasset://fonts/families/Inconsolata.ttf",
+    Enum.FontWeight.Regular,
+    Enum.FontStyle.Normal
+)
+
+local function worldToViewport(pos)
+    local vs = Camera.ViewportSize
+    local rel = Camera.CFrame:PointToObjectSpace(pos)
+    local ar = vs.X / vs.Y
+    local hh = -rel.Z * math.tan(math.rad(Camera.FieldOfView / 2))
+    local hw = ar * hh
+    local d = rel - Vector3.new(-hw, hh, rel.Z)
+    local x = d.X / (hw * 2)
+    local y = -d.Y / (hh * 2)
+    local on = -rel.Z > 0 and x >= 0 and x <= 1 and y >= 0 and y <= 1
+    return Vector3.new(x * vs.X, y * vs.Y, -rel.Z), on
+end
+
+-- รายชื่อศัตรูที่ ESP จะแสดง
+-- ถ้าเกมมี Attribute "Match" จะใช้ตามแมตช์ ถ้าไม่มีจะใช้ผู้เล่นทุกคน (เคารพ "เช็คทีม")
+task.spawn(function()
+    while task.wait(0.1) do
+        if AnyESP() then
+            local list = {}
+            local mm = LocalPlayer:GetAttribute("Match")
+
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer then
+                    local c = p.Character
+                    local h = c and c:FindFirstChildOfClass("Humanoid")
+
+                    if h and h.Health > 0 then
+                        local ok
+
+                        if mm then
+                            ok = mm == p:GetAttribute("Match")
+                        else
+                            ok = not (
+                                Config.TeamCheck
+                                and p.Team
+                                and LocalPlayer.Team
+                                and p.Team == LocalPlayer.Team
+                            )
+                        end
+
+                        if ok then
+                            table.insert(list, p)
+                        end
+                    end
+                end
+            end
+
+            S.enemies = list
+        end
+    end
+end)
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    if S.esp_data[player.Name] then return end
+
+    local d = {
+        player = player,
+        objects = {},
+        drawings = {},
+        cornerLines = {},
+        tracer = nil,
+        info = {character = nil, humanoid = nil, rootpart = nil}
+    }
+
+    S.esp_data[player.Name] = d
+
+    local function new(cls, props)
+        local i = Instance.new(cls)
+        for k, v in pairs(props) do
+            i[k] = v
+        end
+        return i
+    end
+
+    d.objects.holder = new("Frame", {
+        Name = "\000",
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.fromOffset(0, 0),
+        BorderSizePixel = 0,
+        Parent = ESPHolder
+    })
+
+    d.objects.name = new("TextLabel", {
+        FontFace = ESPFont,
+        TextColor3 = S.esp_name_color,
+        Text = player.DisplayName .. " (@" .. player.Name .. ")",
+        TextStrokeTransparency = 0,
+        AnchorPoint = Vector2.new(0, 1),
+        Size = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, -5),
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        TextSize = 9,
+        Parent = d.objects.holder
+    })
+
+    d.objects.box_outline = new("UIStroke", {
+        LineJoinMode = Enum.LineJoinMode.Miter,
+        Enabled = false,
+        Parent = d.objects.holder
+    })
+
+    d.objects.box_handler = new("Frame", {
+        Name = "\000",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 1, 0, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        BorderSizePixel = 0,
+        Visible = false,
+        Parent = d.objects.holder
+    })
+
+    d.objects.box_color = new("UIStroke", {
+        Color = S.esp_box_color,
+        LineJoinMode = Enum.LineJoinMode.Miter,
+        Parent = d.objects.box_handler
+    })
+
+    -- กล่องแบบ Corner: วาดเส้นมุมทั้ง 4 ด้าน
+    d.objects.corners = new("Frame", {
+        Name = "\000",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        BorderSizePixel = 0,
+        Visible = false,
+        Parent = d.objects.holder
+    })
+
+    local cornerDefs = {
+        {Vector2.new(0, 0)}, {Vector2.new(1, 0)},
+        {Vector2.new(0, 1)}, {Vector2.new(1, 1)},
+    }
+
+    for _, def in ipairs(cornerDefs) do
+        local a = def[1]
+
+        local h = new("Frame", {
+            BackgroundColor3 = S.esp_box_color,
+            BorderSizePixel = 0,
+            AnchorPoint = a,
+            Position = UDim2.fromScale(a.X, a.Y),
+            Size = UDim2.new(0.3, 0, 0, 1),
+            Parent = d.objects.corners
+        })
+
+        local v = new("Frame", {
+            BackgroundColor3 = S.esp_box_color,
+            BorderSizePixel = 0,
+            AnchorPoint = a,
+            Position = UDim2.fromScale(a.X, a.Y),
+            Size = UDim2.new(0, 1, 0.3, 0),
+            Parent = d.objects.corners
+        })
+
+        table.insert(d.cornerLines, h)
+        table.insert(d.cornerLines, v)
+    end
+
+    d.objects.healthbar_holder = new("Frame", {
+        AnchorPoint = Vector2.new(1, 0),
+        Name = "\000",
+        Position = UDim2.new(0, -3, 0, -1),
+        BorderColor3 = Color3.fromRGB(0, 0, 0),
+        Size = UDim2.new(0, 4, 1, 2),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        Visible = false,
+        Parent = d.objects.holder
+    })
+
+    d.objects.healthbar = new("Frame", {
+        Name = "\000",
+        Position = UDim2.new(0, 1, 0, 1),
+        BorderColor3 = Color3.fromRGB(0, 0, 0),
+        Size = UDim2.new(1, -2, 1, -2),
+        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Parent = d.objects.healthbar_holder
+    })
+
+    new("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(0.66, Color3.fromRGB(255, 165, 0)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+        }),
+        Parent = d.objects.healthbar
+    })
+
+    d.objects.distance = new("TextLabel", {
+        FontFace = ESPFont,
+        TextColor3 = S.esp_distance_color,
+        Text = "0st",
+        TextStrokeTransparency = 0,
+        Name = "\000",
+        Size = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 1, 5),
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        TextSize = 9,
+        Visible = false,
+        Parent = d.objects.holder
+    })
+
+    -- ถ้า executor ไม่มี Drawing: โครงกระดูก/เส้นโยงจะใช้ไม่ได้ แต่ชื่อ กล่อง เลือด ระยะ ยังทำงานปกติ
+    for _ = 1, #skeletonR15 do
+        local dr = MakeDrawing("Line", {Color = S.esp_skeleton_color, Thickness = 1, Transparency = 1, Visible = false})
+
+        if dr then
+            table.insert(d.drawings, dr)
+        end
+    end
+
+    d.tracer = MakeDrawing("Line", {Color = S.esp_tracer_color, Thickness = 1.5, Transparency = 1, Visible = false})
+
+    function d.update_character()
+        local c = player.Character
+
+        if not c then
+            d.info.character = nil
+            d.info.humanoid = nil
+            d.info.rootpart = nil
+            return
+        end
+
+        d.info.character = c
+        d.info.humanoid = c:FindFirstChildOfClass("Humanoid")
+        d.info.rootpart = c:FindFirstChild("HumanoidRootPart")
+    end
+
+    d.update_character()
+end
+
+local function removeESP(player)
+    local d = S.esp_data[player.Name]
+    if not d then return end
+
+    if d.tracer then
+        pcall(function() d.tracer:Remove() end)
+    end
+
+    for _, v in ipairs(d.drawings) do
+        pcall(function() v:Remove() end)
+    end
+
+    for _, v in pairs(d.objects) do
+        if typeof(v) == "Instance" then
+            pcall(function() v:Destroy() end)
+        end
+    end
+
+    S.esp_data[player.Name] = nil
+end
+
+-- อัปเดตเฉพาะสี (การแสดง/ซ่อนแต่ละส่วนทำทุกเฟรมใน updateESP)
+local function refreshESPTheme()
+    for _, d in pairs(S.esp_data) do
+        d.objects.name.TextColor3 = S.esp_name_color
+        d.objects.box_color.Color = S.esp_box_color
+        d.objects.distance.TextColor3 = S.esp_distance_color
+
+        for _, line in ipairs(d.cornerLines) do
+            line.BackgroundColor3 = S.esp_box_color
+        end
+
+        for _, v in ipairs(d.drawings) do
+            v.Color = S.esp_skeleton_color
+        end
+
+        if d.tracer then
+            d.tracer.Color = S.esp_tracer_color
+        end
+    end
+end
+
+local function hideESP(d)
+    d.objects.holder.Visible = false
+
+    for _, v in ipairs(d.drawings) do
+        v.Visible = false
+    end
+
+    if d.tracer then
+        d.tracer.Visible = false
+    end
+end
+
+local function calcBox(hrp)
+    if not hrp then return nil, nil, false, nil end
+
+    local top = hrp.Position + hrp.CFrame.UpVector * 1.8 + Camera.CFrame.UpVector
+    local bot = hrp.Position - hrp.CFrame.UpVector * 2.5
+    local bot2 = bot - Camera.CFrame.UpVector
+    local dist = (hrp.Position - Camera.CFrame.Position).Magnitude
+    local sT, onT = worldToViewport(top)
+    local sB, onB = worldToViewport(bot2)
+
+    local w = math.max(math.floor(math.abs(sT.X - sB.X)), 3)
+    local h = math.max(math.floor(math.max(math.abs(sB.Y - sT.Y), w / 2)), 3)
+    local size = Vector2.new(math.floor(math.max(h / 1.5, w)), h)
+    local pos = Vector2.new(
+        math.floor(sT.X * 0.5 + sB.X * 0.5 - size.X * 0.5),
+        math.floor(math.min(sT.Y, sB.Y))
+    )
+
+    return size, pos, onT and onB, dist
+end
+
+local lastESPError
+
+local function updateESP(d, myHrp)
+    if d.player.Character ~= d.info.character then
+        d.update_character()
+    end
+
+    local c = d.info.character
+    local h = d.info.humanoid
+
+    if not c or not h or h.Health <= 0 or not h.RootPart then
+        hideESP(d)
+        return
+    end
+
+    local size, pos, on, dist = calcBox(h.RootPart)
+
+    if not size or dist > S.esp_range then
+        hideESP(d)
+        return
+    end
+
+    -- โครงกระดูก
+    local list = S.esp_skeleton and GetSkeletonPairs(c) or nil
+
+    for i, dr in ipairs(d.drawings) do
+        local pr = list and list[i]
+        local pa = pr and c:FindFirstChild(pr[1])
+        local pb = pr and c:FindFirstChild(pr[2])
+        local shown = false
+
+        if pa and pb then
+            local from, fa = project(pa.Position)
+            local to, fb = project(pb.Position)
+
+            if fa and fb then
+                dr.From = from
+                dr.To = to
+                shown = true
+            end
+        end
+
+        dr.Visible = shown
+    end
+
+    -- เส้นโยง
+    local tracerShown = false
+
+    if S.esp_tracers and d.tracer then
+        local target, front = project(h.RootPart.Position)
+
+        if front then
+            local vs = Camera.ViewportSize
+            local origin = S.esp_tracer_origin
+            local from
+
+            if origin == "Top" then
+                from = Vector2.new(vs.X / 2, 0)
+            elseif origin == "Center" then
+                from = Vector2.new(vs.X / 2, vs.Y / 2)
+            elseif origin == "Self" and myHrp then
+                local selfPos, selfFront = project(myHrp.Position)
+                from = selfFront and selfPos or Vector2.new(vs.X / 2, vs.Y)
+            else
+                from = Vector2.new(vs.X / 2, vs.Y)
+            end
+
+            d.tracer.From = from
+            d.tracer.To = target
+            tracerShown = true
+        end
+    end
+
+    if d.tracer then
+        d.tracer.Visible = tracerShown
+    end
+
+    -- ชื่อ / กล่อง / เลือด / ระยะ (ตั้งค่าตามสวิตช์ทุกเฟรม)
+    local o = d.objects
+    local isCorner = S.esp_box_type == "Corner"
+
+    o.holder.Visible = on
+
+    if on then
+        o.holder.Position = UDim2.fromOffset(pos.X, pos.Y)
+        o.holder.Size = UDim2.fromOffset(size.X, size.Y)
+
+        o.name.Visible = S.esp_names
+        o.box_handler.Visible = S.esp_boxes and not isCorner
+        o.box_outline.Enabled = S.esp_boxes and not isCorner
+        o.corners.Visible = S.esp_boxes and isCorner
+        o.healthbar_holder.Visible = S.esp_healthbar
+        o.distance.Visible = S.esp_distance
+
+        if S.esp_distance then
+            o.distance.Text = math.round(dist or 0) .. "st"
+        end
+
+        if S.esp_healthbar then
+            local maxHealth = h.MaxHealth
+            local pct = maxHealth > 0 and math.clamp(h.Health / maxHealth, 0, 1) or 0
+
+            o.healthbar.Size = UDim2.new(1, -2, pct, -2)
+            o.healthbar.Position = UDim2.new(0, 1, 1 - pct, 1)
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if not AnyESP() then
+        for _, d in pairs(S.esp_data) do
+            hideESP(d)
+        end
+        return
+    end
+
+    local char = LocalPlayer.Character
+    local myHrp = char and char:FindFirstChild("HumanoidRootPart")
+    local active = {}
+
+    for _, p in ipairs(S.enemies) do
+        active[p.Name] = true
+    end
+
+    for _, p in ipairs(S.enemies) do
+        if p ~= LocalPlayer and not S.esp_data[p.Name] then
+            local ok, err = pcall(function()
+                createESP(p)
+                refreshESPTheme()
+            end)
+
+            if not ok and err ~= lastESPError then
+                lastESPError = err
+                warn("[Flexozy] ESP create error: " .. tostring(err))
+            end
+
+            break
+        end
+    end
+
+    -- แยก pcall ทีละคน: ถ้าคนใดคนหนึ่ง error คนอื่นยังอัปเดตตามปกติ
+    for _, p in ipairs(S.enemies) do
+        if p ~= LocalPlayer then
+            local d = S.esp_data[p.Name]
+
+            if d then
+                local ok, err = pcall(updateESP, d, myHrp)
+
+                if not ok then
+                    pcall(hideESP, d)
+
+                    if err ~= lastESPError then
+                        lastESPError = err
+                        warn("[Flexozy] ESP error: " .. tostring(err))
+                    end
+                end
+            end
+        end
+    end
+
+    for name, d in pairs(S.esp_data) do
+        if not active[name] then
+            removeESP(d.player)
+        end
+    end
+end)
+
+-- ========== UI ==========
+
+local Win = Flexozy:CreateWindow({
+    Title = "Flexozy",
+    SubTitle = "Premium Script",
+    Monogram = "FX",
+    Logo = 112028775617493,
+    Size = Vector2.new(720, 520),
+    ToggleKey = Enum.KeyCode.RightControl,
+    StatsPill = true,
+    Accent = "Pink",
+    ConfigName = "flexozy",
+    Folder = "Flexozy",
+    AutoSave = false,
+    Language = "TH",
+    LanguageScope = "All"
+})
+
+-- คำแปลภาษาอังกฤษของข้อความในสคริปต์ (รูปแบบ: [อังกฤษ] = ไทย)
+Win:AddTranslations({
+    ["Toggle auto aim on/off"] = "เปิด/ปิดการเล็งอัตโนมัติ",
+    ["Max distance"] = "ระยะสูงสุด",
+    ["Aim part"] = "จุดล็อก",
+    ["Wall check"] = "เช็คกำแพง",
+    ["Used by SilentAim and inventory"] = "ใช้กับ SilentAim และกระเป๋า",
+    ["Team check"] = "เช็คทีม",
+    ["Used by SilentAim, ESP and inventory"] = "ใช้กับ SilentAim, ESP และกระเป๋า",
+    ["Show FOV"] = "แสดง FOV",
+    ["Show the FOV circle on screen"] = "แสดงวงกลม FOV บนหน้าจอ",
+    ["Target line"] = "เส้นชี้เป้า",
+    ["Line from screen center to the enemy"] = "แสดงเส้นจากกลางจอไปหาศัตรู",
+    ["Re-hook Aimlock"] = "รีฮุก Aimlock",
+    ["Press to hook again"] = "กดเพื่อฮุกใหม่",
+    ["Re-hooked"] = "รีฮุกเรียบร้อย",
+    ["ProjectileHandler not found, see Console (F9)"] = "ไม่พบ ProjectileHandler ดู Console (F9)",
+    ["Names"] = "ชื่อ",
+    ["Boxes"] = "กล่อง",
+    ["Box type"] = "ประเภทกล่อง",
+    ["Normal"] = "ปกติ",
+    ["Corner"] = "มุม",
+    ["Health"] = "เลือด",
+    ["Distance"] = "ระยะ",
+    ["Skeleton"] = "โครงกระดูก",
+    ["Tracers"] = "เส้นโยง",
+    ["Tracer origin"] = "จุดเริ่มเส้นโยง",
+    ["Self"] = "ตัวเรา",
+    ["Top center"] = "บนกลางจอ",
+    ["Bottom center"] = "ล่างกลางจอ",
+    ["Screen center"] = "กลางจอ",
+    ["ESP range"] = "ระยะแสดง ESP",
+    ["Show 5 item slots"] = "แสดงไอเทม 5 ช่อง",
+    ["Show every item"] = "แสดงไอเทมทุกชิ้น",
+    ["Skip friends"] = "ข้ามเพื่อน",
+    ["Never target people on your friends list"] = "ไม่ล็อกคนที่เป็นเพื่อนของคุณ",
+    ["Skip players"] = "ข้ามผู้เล่น",
+    ["Clear skip list"] = "ล้างรายชื่อข้าม",
+    ["Stop skipping everyone"] = "ยกเลิกการข้ามทุกคน",
+    ["ESP (all)"] = "ESP ทั้งหมด",
+    ["Reset all keybinds"] = "รีเซ็ตคีย์ลัดทั้งหมด",
+    ["Infinite stamina"] = "สเตมิน่าไม่ลด",
+    ["Choose job"] = "เลือกงาน",
+    ["Auto farm"] = "ฟาร์มอัตโนมัติ",
+    ["Walks to NPCs, plays mini-games and sells for you (walking only, no teleport)"] = "เดินหา NPC + เล่นมินิเกม + ขายของให้อัตโนมัติ (เดินล้วน ไม่วาร์ป)",
+    ["Auto mini-games"] = "เล่นมินิเกมอัตโนมัติ",
+    ["Off = you play, farming waits until the mini-game closes"] = "ปิด = คุณเล่นเอง ฟาร์มจะรอจนมินิเกมปิด",
+    ["Auto sell"] = "ขายของอัตโนมัติ",
+    ["Sprint while walking"] = "วิ่งตอนเดิน",
+    ["Avoid walls"] = "หลบกำแพง",
+    ["Walks around walls with pathfinding; if stuck, jumps and re-plans the path"] = "เดินอ้อมกำแพงด้วย Pathfinding ถ้าเดินติดจะกระโดดแล้วคำนวณเส้นทางใหม่",
+    ["Holds Shift automatically while walking to job spots"] = "กด Shift ให้อัตโนมัติระหว่างเดินไปจุดงาน",
+    ["Used by the trash job. Off = sell manually"] = "ใช้กับงานเก็บขยะ ปิด = ขายเอง",
+    ["Delay between spots"] = "หน่วงเวลาระหว่างจุด",
+    ["Job search range"] = "ระยะค้นหาจุดงาน",
+    ["Rest after each job"] = "พักหลังเสร็จงาน",
+    ["Only works on maps with the same job folders as the original map"] = "ใช้ได้เฉพาะแมพที่มีโฟลเดอร์งานเหมือนแมพสายเลือดอาชีวะ",
+    ["Stamina stays full while running"] = "วิ่งแล้วสเตมิน่าไม่ลด",
+    ["Clear every hotkey you set"] = "ล้างปุ่มลัดที่ตั้งไว้ทุกอัน",
+    ["All keybinds were reset"] = "รีเซ็ตคีย์ลัดทั้งหมดแล้ว",
+    ["Notify on hotkey"] = "แจ้งเตือนเมื่อกดปุ่มลัด",
+    ["Click a box and press a key | Esc = cancel | Backspace = clear"] = "คลิกช่องแล้วกดปุ่มที่ต้องการ | Esc = ยกเลิก | Backspace = ล้างปุ่ม",
+    ["Inventory range"] = "ระยะแสดงกระเป๋า",
+})
+
+Win:Section("Main")
+
+local HomeTab = Win:Tab({
+    Title = "Home",
+    Subtitle = "Map & Server Info",
+    Icon = Flexozy.Icons.Grid
+})
+
+Safe("BuildHome", function()
+    Win:BuildHome(HomeTab)
+end)
+
+-- การ์ด Discord: ไอคอน/ชื่อเซิร์ฟเวอร์ + ออนไลน์/ออฟไลน์/สมาชิก + ปุ่มเข้าร่วม
+Safe("BuildDiscord", function()
+    Win:BuildDiscord(HomeTab, "https://discord.gg/WFUejxeggt")
+end)
+
+local AimTab = Win:Tab({
+    Title = "Aim",
+    Subtitle = "Silent Aim Settings",
+    Icon = Flexozy.Icons.Sword
+})
+
+local AimGroupL = AimTab:Group("Aim Settings", "Left")
+local AimGroupR = AimTab:Group("Aim Extra", "Right")
+
+Tg.SilentAim = AimGroupL:Toggle("SilentAim", "เปิด/ปิดการเล็งอัตโนมัติ", false, function(state)
+    Config.SilentAim = state
+
+    if state then
+        EnsureHook()
+    end
+end, "SilentAim")
+
+AimGroupL:Slider("FOV", 60, 400, 180, "px", function(value)
+    Config.FOV = value
+end, 1, "FOV")
+
+AimGroupL:Slider("ระยะสูงสุด", 50, 2000, 800, "studs", function(value)
+    Config.MaxDistance = value
+end, 50, "MaxDistance")
+
+AimGroupL:Dropdown("จุดล็อก", {
+    "Head",
+    "UpperTorso",
+    "HumanoidRootPart"
+}, "Head", function(value)
+    Config.AimPart = value
+end, "AimPart")
+
+AimGroupR:Toggle("เช็คกำแพง", "ใช้กับ SilentAim และกระเป๋า", false, function(state)
+    Config.WallCheck = state
+end, "WallCheck")
+
+AimGroupR:Toggle("เช็คทีม", "ใช้กับ SilentAim, ESP และกระเป๋า", false, function(state)
+    Config.TeamCheck = state
+end, "TeamCheck")
+
+Tg.ShowFOV = AimGroupR:Toggle("แสดง FOV", "แสดงวงกลม FOV บนหน้าจอ", false, function(state)
+    Config.ShowFOV = state
+end, "ShowFOV")
+
+Tg.TargetLine = AimGroupR:Toggle("เส้นชี้เป้า", "แสดงเส้นจากกลางจอไปหาศัตรู", false, function(state)
+    Config.ShowTracer = state
+end, "ShowTracer")
+
+AimGroupR:Button("รีฮุก Aimlock", "กดเพื่อฮุกใหม่", function()
+    Hooked = false
+
+    task.spawn(function()
+        local ok = HookProjectile()
+
+        Win:Notify({
+            Title = "Flexozy",
+            Content = ok and "รีฮุกเรียบร้อย" or "ไม่พบ ProjectileHandler ดู Console (F9)",
+            Duration = 3,
+            Type = ok and "Success" or "Warning"
+        })
+    end)
+end)
+
+Safe("SkipList", function()
+local SkipGroup = AimTab:Group("Skip List", "Left")
+
+local function BuildSkipOptions()
+    local opts = {}
+    table.clear(SkipOptionToName)
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local label = p.DisplayName .. " (@" .. p.Name .. ")"
+            SkipOptionToName[label] = p.Name
+            table.insert(opts, label)
+        end
+    end
+
+    table.sort(opts)
+
+    return opts
+end
+
+local function SyncSkipSet(list)
+    table.clear(SkipSet)
+
+    for _, label in ipairs(list) do
+        local name = SkipOptionToName[label]
+
+        if name then
+            SkipSet[name] = true
+        end
+    end
+end
+
+local AvatarCache = {}
+
+local function LoadAvatar(userId, image)
+    local cached = AvatarCache[userId]
+
+    if cached then
+        image.Image = cached
+        return
+    end
+
+    task.spawn(function()
+        local ok, content = pcall(function()
+            return Players:GetUserThumbnailAsync(
+                userId,
+                Enum.ThumbnailType.HeadShot,
+                Enum.ThumbnailSize.Size48x48
+            )
+        end)
+
+        if ok and content then
+            AvatarCache[userId] = content
+
+            if image.Parent then
+                image.Image = content
+            end
+        end
+    end)
+end
+
+-- ใส่รูปโปรไฟล์หน้าชื่อผู้เล่นแต่ละแถวในรายการ (ต้องเรียกใหม่ทุกครั้งที่ Refresh)
+local function DecorateSkipList()
+    if not SkipDropdown or not SkipDropdown.Instance then return end
+
+    local list = SkipDropdown.Instance:FindFirstChildOfClass("ScrollingFrame")
+    if not list then return end
+
+    for _, btn in ipairs(list:GetChildren()) do
+        if btn:IsA("TextButton") and not btn:FindFirstChild("Avatar") then
+            local lbl = btn:FindFirstChildOfClass("TextLabel")
+            local name = lbl and SkipOptionToName[lbl.Text]
+            local plr = name and Players:FindFirstChild(name)
+
+            if plr then
+                lbl.Position = UDim2.fromOffset(36, 0)
+                lbl.Size = UDim2.new(1, -56, 1, 0)
+
+                local img = Instance.new("ImageLabel")
+                img.Name = "Avatar"
+                img.Position = UDim2.fromOffset(8, 4)
+                img.Size = UDim2.fromOffset(20, 20)
+                img.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+                img.BorderSizePixel = 0
+                img.Parent = btn
+
+                Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+
+                LoadAvatar(plr.UserId, img)
+            end
+        end
+    end
+end
+
+local function RefreshSkipList()
+    if not SkipDropdown then return end
+
+    SkipDropdown.Refresh(BuildSkipOptions())
+    SyncSkipSet(SkipDropdown.Get())
+    DecorateSkipList()
+end
+
+SkipGroup:Toggle("ข้ามเพื่อน", "ไม่ล็อกคนที่เป็นเพื่อนของคุณ", false, function(state)
+    Config.SkipFriends = state
+end, "SkipFriends")
+
+SkipDropdown = SkipGroup:Dropdown({
+    Title = "ข้ามผู้เล่น",
+    Options = BuildSkipOptions(),
+    Default = {},
+    Multi = true,
+    Callback = function(list)
+        SyncSkipSet(list)
+    end,
+    Flag = "SkipPlayers"
+})
+
+DecorateSkipList()
+
+SkipGroup:Button("ล้างรายชื่อข้าม", "ยกเลิกการข้ามทุกคน", function()
+    SkipDropdown.Set({})
+end)
+
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        RefreshFriend(p)
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    RefreshFriend(p)
+    task.delay(0.2, RefreshSkipList)
+end)
+
+Players.PlayerRemoving:Connect(function()
+    task.delay(0.2, RefreshSkipList)
+end)
+end)
+
+local VisualTab = Win:Tab({
+    Title = "ESP",
+    Subtitle = "ESP & Overlay",
+    Icon = 10734942565
+})
+
+local VisualGroupL = VisualTab:Group("ESP Settings", "Left")
+local VisualGroupR = VisualTab:Group("ESP Extra", "Right")
+local VisualGroupInv = VisualTab:Group("Inventory", "Left")
+
+Tg.Names = VisualGroupL:Toggle("ชื่อ", nil, false, function(state)
+    S.esp_names = state
+    refreshESPTheme()
+end, "ESPNames")
+
+Tg.Boxes = VisualGroupL:Toggle("กล่อง", nil, false, function(state)
+    S.esp_boxes = state
+    refreshESPTheme()
+end, "ESPBoxes")
+
+VisualGroupL:Dropdown("ประเภทกล่อง", {"Normal", "Corner"}, "Normal", function(value)
+    S.esp_box_type = value
+    refreshESPTheme()
+end, "ESPBoxType")
+
+Tg.Health = VisualGroupL:Toggle("เลือด", nil, false, function(state)
+    S.esp_healthbar = state
+    refreshESPTheme()
+end, "ESPHealth")
+
+Tg.Distance = VisualGroupR:Toggle("ระยะ", nil, false, function(state)
+    S.esp_distance = state
+    refreshESPTheme()
+end, "ESPDistance")
+
+Tg.Skeleton = VisualGroupR:Toggle("โครงกระดูก", nil, false, function(state)
+    S.esp_skeleton = state
+    refreshESPTheme()
+end, "ESPSkeleton")
+
+Tg.Tracers = VisualGroupR:Toggle("เส้นโยง", nil, false, function(state)
+    S.esp_tracers = state
+    refreshESPTheme()
+end, "ESPTracers")
+
+VisualGroupR:Dropdown("จุดเริ่มเส้นโยง", {
+    "ตัวเรา",
+    "บนกลางจอ",
+    "ล่างกลางจอ",
+    "กลางจอ"
+}, "ล่างกลางจอ", function(value)
+    S.esp_tracer_origin = TracerOrigins[value] or "Bottom"
+end, "ESPTracerOrigin")
+
+VisualGroupR:Slider("ระยะแสดง ESP", 50, 3000, 1000, "studs", function(value)
+    S.esp_range = value
+end, 50, "ESPRange")
+
+local InvToggleSlots, InvToggleAll
+
+local function ApplyInvMode(mode)
+    Config.InvMode = mode
+
+    for _, data in pairs(InvData) do
+        data.LastInvUpdate = 0
+
+        if data.InvGui then
+            data.InvGui.Enabled = false
+        end
+
+        if data.AllGui then
+            data.AllGui.Enabled = false
+        end
+    end
+end
+
+-- เปิดอันใดอันหนึ่งได้ทีละอัน: เปิดอันใหม่ → อันเก่าปิดเอง
+InvToggleSlots = VisualGroupInv:Toggle("Inventory", "แสดงไอเทม 5 ช่อง", false, function(state)
+    if state then
+        if InvToggleAll then
+            InvToggleAll.Set(false, true)
+        end
+
+        ApplyInvMode("slots")
+    elseif Config.InvMode == "slots" then
+        ApplyInvMode(false)
+    end
+end, "Inventory")
+
+InvToggleAll = VisualGroupInv:Toggle("Inventory (All)", "แสดงไอเทมทุกชิ้น", false, function(state)
+    if state then
+        if InvToggleSlots then
+            InvToggleSlots.Set(false, true)
+        end
+
+        ApplyInvMode("all")
+    elseif Config.InvMode == "all" then
+        ApplyInvMode(false)
+    end
+end, "InventoryAll")
+
+VisualGroupInv:Slider("ระยะแสดงกระเป๋า", 20, 1000, 150, "studs", function(value)
+    Config.InvDistance = value
+end, 10, "InvDistance")
+
+Safe("PlayerTab", function()
+local PlayerTab = Win:Tab({
+    Title = "Player",
+    Subtitle = "Movement & Stats",
+    Icon = Flexozy.Icons.Refresh
+})
+
+local StaminaGroup = PlayerTab:Group("Stamina", "Left")
+
+StaminaOnLock = function(idx)
+    Win:Notify({
+        Title = "Flexozy",
+        Content = "ล็อกสเตมิน่าแล้ว (upvalue ตำแหน่ง " .. idx .. ")",
+        Duration = 3,
+        Type = "Success"
+    })
+end
+
+Tg.InfStamina = StaminaGroup:Toggle("สเตมิน่าไม่ลด", "วิ่งแล้วสเตมิน่าไม่ลด", false, function(state)
+    Config.InfStamina = state
+
+    if state then
+        local nFns, nVals = StartStamina()
+
+        if nFns + nVals > 0 then
+            Win:Notify({
+                Title = "Flexozy",
+                Content = string.format("พบปุ่มวิ่ง %d ฟังก์ชัน | ค่า Attribute %d ค่า (วิ่งสักครู่เพื่อให้ระบบจับค่า)", nFns, nVals),
+                Duration = 4,
+                Type = "Success"
+            })
+        elseif not StaminaSupported() then
+            Win:Notify({
+                Title = "Flexozy",
+                Content = "executor ไม่รองรับ getconnections/debug ใช้ได้แค่แบบ Attribute",
+                Duration = 4,
+                Type = "Warning"
+            })
+        else
+            Win:Notify({
+                Title = "Flexozy",
+                Content = "ยังไม่พบปุ่มวิ่งหรือค่าสเตมิน่า (สแกนต่อเรื่อยๆ) ลองวิ่งสักครู่",
+                Duration = 4,
+                Type = "Warning"
+            })
+        end
+    else
+        StopStamina()
+    end
+end, "InfStamina")
+end)
+
+Safe("FarmTab", function()
+    local FarmTab = Win:Tab({
+        Title = "Farm",
+        Subtitle = "Auto job farm",
+        Icon = Flexozy.Icons.Teleport
+    })
+
+    local FarmGroup = FarmTab:Group("Auto Farm", "Left")
+    local FarmSet = FarmTab:Group("Farm Settings", "Right")
+
+    FarmAPI.SetNotify(function(title, content, icon, dur)
+        local kind = "Info"
+
+        if icon == "triangle-alert" or icon == "circle-x" then
+            kind = "Warning"
+        elseif icon == "circle-check" then
+            kind = "Success"
+        end
+
+        Win:Notify({
+            Title = title,
+            Content = content or "",
+            Duration = dur or 3,
+            Type = kind
+        })
+    end)
+
+    FarmGroup:Dropdown("เลือกงาน", FarmAPI.JobNames, FarmAPI.Farm.Job, function(value)
+        FarmAPI.SetJob(value)
+    end, "FarmJob")
+
+    Tg.Farm = FarmGroup:Toggle("ฟาร์มอัตโนมัติ", "เดินหา NPC + เล่นมินิเกม + ขายของให้อัตโนมัติ (เดินล้วน ไม่วาร์ป)", false, function(state)
+        if state then
+            FarmAPI.Start()
+        else
+            FarmAPI.Stop()
+        end
+    end, "AutoFarm")
+
+    FarmGroup:Toggle("เล่นมินิเกมอัตโนมัติ", "ปิด = คุณเล่นเอง ฟาร์มจะรอจนมินิเกมปิด", true, function(state)
+        FarmAPI.Farm.AutoMiniGame = state
+    end, "FarmMiniGame")
+
+    FarmGroup:Toggle("วิ่งตอนเดิน", "กด Shift ให้อัตโนมัติระหว่างเดินไปจุดงาน", true, function(state)
+        FarmAPI.Farm.Sprint = state
+
+        if not state then
+            FarmAPI.StopSprint()
+        end
+    end, "FarmSprint")
+
+    FarmGroup:Toggle("หลบกำแพง", "เดินอ้อมกำแพงด้วย Pathfinding ถ้าเดินติดจะกระโดดแล้วคำนวณเส้นทางใหม่", true, function(state)
+        FarmAPI.Farm.AvoidWalls = state
+    end, "FarmAvoidWalls")
+
+    FarmGroup:Toggle("ขายของอัตโนมัติ", "ใช้กับงานเก็บขยะ ปิด = ขายเอง", true, function(state)
+        FarmAPI.Farm.AutoSell = state
+    end, "FarmAutoSell")
+
+    FarmSet:Slider("หน่วงเวลาระหว่างจุด", 2, 30, 6, "x0.1s", function(value)
+        FarmAPI.Farm.Delay = value / 10
+    end, 1, "FarmDelay")
+
+    FarmSet:Slider("พักหลังเสร็จงาน", 0, 10, 5, "s", function(value)
+        FarmAPI.Farm.Rest = value
+    end, 0.5, "FarmRest")
+
+    FarmSet:Slider("ระยะค้นหาจุดงาน", 50, 600, 250, "studs", function(value)
+        FarmAPI.Farm.Range = value
+    end, 10, "FarmRange")
+
+    FarmSet:Label("ใช้ได้เฉพาะแมพที่มีโฟลเดอร์งานเหมือนแมพสายเลือดอาชีวะ")
+end)
+
+Safe("KeybindsTab", function()
+local KeyTab = Win:Tab({
+    Title = "Keybinds",
+    Subtitle = "PC hotkeys",
+    Icon = 10723416765
+})
+
+local KeyGroupAim = KeyTab:Group("Aim", "Left")
+local KeyGroupInv = KeyTab:Group("Inventory", "Left")
+local KeyGroupPlayer = KeyTab:Group("Player", "Left")
+local KeyGroupESP = KeyTab:Group("ESP", "Right")
+local KeyGroupOpt = KeyTab:Group("Options", "Right")
+
+local function NotifyKey(title, on)
+    if not Config.KeybindNotify then return end
+
+    Win:Notify({
+        Title = "Flexozy",
+        Content = title .. ": " .. (on and "ON" or "OFF"),
+        Duration = 1.5,
+        Type = on and "Success" or "Info"
+    })
+end
+
+local KeyObjects = {}
+
+-- ผูกปุ่มลัดกับ Toggle (กดแล้วสลับเปิด/ปิด และสวิตช์ใน UI เปลี่ยนตาม)
+local function BindToggle(group, title, toggle, flag)
+    local kb = group:Keybind({
+        Title = title,
+        Default = Enum.KeyCode.Unknown,
+        Flag = "Key_" .. flag,
+        Callback = function()
+            local new = not toggle.Get()
+            toggle.Set(new)
+            NotifyKey(title, new)
+        end
+    })
+
+    table.insert(KeyObjects, kb)
+end
+
+BindToggle(KeyGroupAim, "SilentAim", Tg.SilentAim, "SilentAim")
+BindToggle(KeyGroupAim, "แสดง FOV", Tg.ShowFOV, "ShowFOV")
+BindToggle(KeyGroupAim, "เส้นชี้เป้า", Tg.TargetLine, "TargetLine")
+
+BindToggle(KeyGroupInv, "Inventory", InvToggleSlots, "Inventory")
+BindToggle(KeyGroupInv, "Inventory (All)", InvToggleAll, "InventoryAll")
+
+BindToggle(KeyGroupPlayer, "สเตมิน่าไม่ลด", Tg.InfStamina, "InfStamina")
+BindToggle(KeyGroupPlayer, "ฟาร์มอัตโนมัติ", Tg.Farm, "AutoFarm")
+
+table.insert(KeyObjects, KeyGroupESP:Keybind({
+    Title = "ESP ทั้งหมด",
+    Default = Enum.KeyCode.Unknown,
+    Flag = "Key_ESPAll",
+    Callback = function()
+        local on = not AnyESP()
+
+        for _, k in ipairs({"Names", "Boxes", "Health", "Distance", "Skeleton", "Tracers"}) do
+            Tg[k].Set(on)
+        end
+
+        NotifyKey("ESP ทั้งหมด", on)
+    end
+}))
+
+BindToggle(KeyGroupESP, "ชื่อ", Tg.Names, "Names")
+BindToggle(KeyGroupESP, "กล่อง", Tg.Boxes, "Boxes")
+BindToggle(KeyGroupESP, "เลือด", Tg.Health, "Health")
+BindToggle(KeyGroupESP, "ระยะ", Tg.Distance, "Distance")
+BindToggle(KeyGroupESP, "โครงกระดูก", Tg.Skeleton, "Skeleton")
+BindToggle(KeyGroupESP, "เส้นโยง", Tg.Tracers, "Tracers")
+
+KeyGroupOpt:Toggle("แจ้งเตือนเมื่อกดปุ่มลัด", nil, true, function(state)
+    Config.KeybindNotify = state
+end, "KeybindNotify")
+
+KeyGroupOpt:Button("รีเซ็ตคีย์ลัดทั้งหมด", "ล้างปุ่มลัดที่ตั้งไว้ทุกอัน", function()
+    for _, kb in ipairs(KeyObjects) do
+        kb.Set(Enum.KeyCode.Unknown)
+    end
+
+    Win:Notify({
+        Title = "Flexozy",
+        Content = "รีเซ็ตคีย์ลัดทั้งหมดแล้ว",
+        Duration = 2,
+        Type = "Success"
+    })
+end)
+
+KeyGroupOpt:Label("คลิกช่องแล้วกดปุ่มที่ต้องการ | Esc = ยกเลิก | Backspace = ล้างปุ่ม")
+end)
+
+local SettingsTab = Win:Tab({
+    Title = "Settings",
+    Subtitle = "Interface options",
+    Icon = Flexozy.Icons.Settings
+})
+
+Safe("BuildSettings", function()
+    Win:BuildSettings(SettingsTab)
+end)
+
+-- ========== Overlay (FOV / Tracer / Inventory) ==========
+
+local OverlayGui = Instance.new("ScreenGui")
+OverlayGui.Name = "FLEXOZY_UI_OVERLAY"
+OverlayGui.ResetOnSpawn = false
+OverlayGui.IgnoreGuiInset = true
+ProtectParent(OverlayGui)
+
+local FOVCircle = Instance.new("Frame")
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVCircle.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.Parent = OverlayGui
+
+Instance.new("UICorner", FOVCircle).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", FOVCircle).Color = Color3.fromRGB(80, 180, 255)
+
+-- เส้นชี้เป้า: เส้นบาง 1px สีชมพู + เงาจางๆ + จุดวงกลมที่ตัวเป้าหมาย
+-- ใช้ Drawing ถ้า executor รองรับ ถ้าไม่รองรับ (หรือตั้งค่าไม่ได้) จะใช้ Frame แทนอัตโนมัติ
+local AIM_COLOR = Color3.fromRGB(236, 72, 153)
+
+local AimLineShadow = MakeDrawing("Line", {Color = Color3.fromRGB(0, 0, 0), Thickness = 3, Transparency = 0.45, Visible = false})
+local AimLine = MakeDrawing("Line", {Color = AIM_COLOR, Thickness = 1, Transparency = 1, Visible = false})
+local AimDotShadow = MakeDrawing("Circle", {Color = Color3.fromRGB(0, 0, 0), Radius = 4, NumSides = 24, Filled = true, Transparency = 0.45, Visible = false})
+local AimDot = MakeDrawing("Circle", {Color = AIM_COLOR, Radius = 2.5, NumSides = 24, Filled = true, Transparency = 1, Visible = false})
+
+local UseDrawingAim = AimLineShadow ~= nil and AimLine ~= nil and AimDotShadow ~= nil and AimDot ~= nil
+
+local AimFrameLine = Instance.new("Frame")
+AimFrameLine.AnchorPoint = Vector2.new(0.5, 0.5)
+AimFrameLine.BackgroundColor3 = AIM_COLOR
+AimFrameLine.BorderSizePixel = 0
+AimFrameLine.Visible = false
+AimFrameLine.Parent = OverlayGui
+
+local AimFrameDot = Instance.new("Frame")
+AimFrameDot.AnchorPoint = Vector2.new(0.5, 0.5)
+AimFrameDot.Size = UDim2.fromOffset(6, 6)
+AimFrameDot.BackgroundColor3 = AIM_COLOR
+AimFrameDot.BorderSizePixel = 0
+AimFrameDot.Visible = false
+AimFrameDot.Parent = OverlayGui
+
+Instance.new("UICorner", AimFrameDot).CornerRadius = UDim.new(1, 0)
+
+if not UseDrawingAim then
+    warn("[Flexozy] Drawing ใช้ไม่ได้บน executor นี้ เส้นชี้เป้าจะใช้ Frame แทน")
+end
+
+local function HideAimLine()
+    if UseDrawingAim then
+        AimLineShadow.Visible = false
+        AimLine.Visible = false
+        AimDotShadow.Visible = false
+        AimDot.Visible = false
+    else
+        AimFrameLine.Visible = false
+        AimFrameDot.Visible = false
+    end
+end
+
+local function ShowAimLine(center, target)
+    local delta = target - center
+    local dist = delta.Magnitude
+
+    -- เว้นช่องว่างรอบกลางจอและรอบจุดเป้า เส้นจะไม่รกเป้าเล็ง
+    local showLine = dist > 18
+    local from, to
+
+    if showLine then
+        local dir = delta.Unit
+        from = center + dir * 10
+        to = target - dir * 5
+    end
+
+    if UseDrawingAim then
+        if showLine then
+            AimLineShadow.From = from
+            AimLineShadow.To = to
+            AimLine.From = from
+            AimLine.To = to
+        end
+
+        AimLineShadow.Visible = showLine
+        AimLine.Visible = showLine
+
+        AimDotShadow.Position = target
+        AimDot.Position = target
+        AimDotShadow.Visible = true
+        AimDot.Visible = true
+    else
+        if showLine then
+            local mid = (from + to) / 2
+
+            AimFrameLine.Size = UDim2.fromOffset((to - from).Magnitude, 1)
+            AimFrameLine.Position = UDim2.fromOffset(mid.X, mid.Y)
+            AimFrameLine.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+        end
+
+        AimFrameLine.Visible = showLine
+        AimFrameDot.Position = UDim2.fromOffset(target.X, target.Y)
+        AimFrameDot.Visible = true
+    end
+end
+
+local TargetInfo = Instance.new("Frame")
+TargetInfo.Size = UDim2.new(0, 150, 0, 22)
+TargetInfo.Position = UDim2.new(0.5, -75, 0.15, 0)
+TargetInfo.BackgroundColor3 = Color3.fromRGB(14, 15, 22)
+TargetInfo.BackgroundTransparency = 0.15
+TargetInfo.Visible = false
+TargetInfo.Parent = OverlayGui
+
+Instance.new("UICorner", TargetInfo).CornerRadius = UDim.new(0, 6)
+
+local TargetLabel = Instance.new("TextLabel")
+TargetLabel.Size = UDim2.new(1, 0, 1, 0)
+TargetLabel.BackgroundTransparency = 1
+TargetLabel.Font = Enum.Font.GothamBold
+TargetLabel.TextColor3 = Color3.new(1, 1, 1)
+TargetLabel.TextSize = 11
+TargetLabel.Text = "FOV: 0"
+TargetLabel.Parent = TargetInfo
+
+-- ========== Inventory UI (5 fixed slots) ==========
+
+local SLOT_STYLE = {
+    held = {
+        bg = Color3.fromRGB(20, 43, 37), bgT = 0.05,
+        stroke = Color3.fromRGB(65, 235, 160), strokeT = 0, thick = 1.5,
+        text = Color3.fromRGB(130, 255, 195),
+    },
+    bag = {
+        bg = Color3.fromRGB(24, 28, 40), bgT = 0.1,
+        stroke = Color3.fromRGB(100, 125, 160), strokeT = 0.25, thick = 1,
+        text = Color3.fromRGB(225, 230, 245),
+    },
+    empty = {
+        bg = Color3.fromRGB(16, 19, 28), bgT = 0.5,
+        stroke = Color3.fromRGB(70, 80, 100), strokeT = 0.65, thick = 1,
+        text = Color3.fromRGB(110, 120, 140),
+    },
+}
+
+local function BuildInventoryGui(parent, count)
+    local cols = Config.INV_MAX_SLOTS
+    count = count or cols
+    local rows = math.max(1, math.ceil(count / cols))
+    local total = rows * cols
+    local sw, sh = Config.INV_SLOT_W, Config.INV_SLOT_H
+    local gap, pad = Config.INV_SPACING, Config.INV_PADDING
+
+    local rowW = cols * sw + (cols - 1) * gap
+    local rowH = rows * sh + (rows - 1) * gap
+    local width = rowW + pad * 2
+    local height = rowH + pad * 2
+
+    local gui = Instance.new("BillboardGui")
+    gui.Name = "InventoryGui"
+    gui.Size = UDim2.fromOffset(width, height)
+    gui.StudsOffset = Vector3.new(0, Config.INV_OFFSET_Y, 0)
+    gui.AlwaysOnTop = true
+    gui.ClipsDescendants = false
+    gui.Enabled = false
+    gui.Parent = parent
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.fromScale(1, 1)
+    frame.BackgroundColor3 = Color3.fromRGB(10, 13, 21)
+    frame.BackgroundTransparency = 0.1
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+    local frameStroke = Instance.new("UIStroke")
+    frameStroke.Color = Color3.fromRGB(90, 115, 155)
+    frameStroke.Transparency = 0.2
+    frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    frameStroke.Parent = frame
+
+    local row = Instance.new("Frame")
+    row.Position = UDim2.fromOffset(pad, pad)
+    row.Size = UDim2.fromOffset(rowW, rowH)
+    row.BackgroundTransparency = 1
+    row.Parent = frame
+
+    local layout = Instance.new("UIGridLayout")
+    layout.CellSize = UDim2.fromOffset(sw, sh)
+    layout.CellPadding = UDim2.fromOffset(gap, gap)
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.FillDirectionMaxCells = cols
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.Parent = row
+
+    local slots = {}
+
+    for i = 1, total do
+        local slot = Instance.new("Frame")
+        slot.LayoutOrder = i
+        slot.Size = UDim2.fromOffset(sw, sh)
+        slot.BorderSizePixel = 0
+        slot.Parent = row
+
+        Instance.new("UICorner", slot).CornerRadius = UDim.new(0, 8)
+
+        local stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = slot
+
+        local index = Instance.new("TextLabel")
+        index.BackgroundTransparency = 1
+        index.Position = UDim2.fromOffset(4, 2)
+        index.Size = UDim2.fromOffset(14, 10)
+        index.Font = Enum.Font.GothamBold
+        index.TextSize = 8
+        index.Text = tostring(i)
+        index.TextXAlignment = Enum.TextXAlignment.Left
+        index.ZIndex = 3
+        index.Parent = slot
+
+        local iconSize = Config.INV_ICON_SIZE
+
+        local icon = Instance.new("ImageLabel")
+        icon.AnchorPoint = Vector2.new(0.5, 0)
+        icon.Position = UDim2.new(0.5, 0, 0, 7)
+        icon.Size = UDim2.fromOffset(iconSize, iconSize)
+        icon.BackgroundTransparency = 1
+        icon.ScaleType = Enum.ScaleType.Fit
+        icon.Visible = false
+        icon.Parent = slot
+
+        local letter = Instance.new("TextLabel")
+        letter.AnchorPoint = Vector2.new(0.5, 0)
+        letter.Position = UDim2.new(0.5, 0, 0, 7)
+        letter.Size = UDim2.fromOffset(iconSize, iconSize)
+        letter.BackgroundTransparency = 1
+        letter.Font = Enum.Font.GothamBlack
+        letter.TextSize = 20
+        letter.Text = ""
+        letter.Visible = false
+        letter.Parent = slot
+
+        local name = Instance.new("TextLabel")
+        name.AnchorPoint = Vector2.new(0.5, 1)
+        name.Position = UDim2.new(0.5, 0, 1, -4)
+        name.Size = UDim2.new(1, -6, 0, 12)
+        name.BackgroundTransparency = 1
+        name.Font = Enum.Font.GothamMedium
+        name.TextSize = 9
+        name.TextTruncate = Enum.TextTruncate.AtEnd
+        name.TextXAlignment = Enum.TextXAlignment.Center
+        name.Text = ""
+        name.Parent = slot
+
+        slots[i] = {
+            Frame = slot, Stroke = stroke, Index = index,
+            Icon = icon, Letter = letter, Name = name,
+        }
+    end
+
+    return gui, slots, rows
+end
+
+local function SetSlot(s, tool, state)
+    local st = SLOT_STYLE[state]
+
+    s.Frame.BackgroundColor3 = st.bg
+    s.Frame.BackgroundTransparency = st.bgT
+    s.Stroke.Color = st.stroke
+    s.Stroke.Transparency = st.strokeT
+    s.Stroke.Thickness = st.thick
+    s.Index.TextColor3 = st.text
+    s.Index.TextTransparency = state == "empty" and 0.5 or 0.3
+
+    if not tool then
+        s.Icon.Visible = false
+        s.Letter.Visible = false
+        s.Name.Text = ""
+        return
+    end
+
+    local iconId = GetToolIcon(tool)
+    s.Name.Text = tool.Name
+    s.Name.TextColor3 = st.text
+
+    if iconId ~= "" then
+        s.Icon.Image = iconId
+        s.Icon.Visible = true
+        s.Letter.Visible = false
+    else
+        s.Icon.Visible = false
+        s.Letter.Text = string.upper(string.sub(tool.Name, 1, 1))
+        s.Letter.TextColor3 = st.stroke
+        s.Letter.Visible = true
+    end
+end
+
+local function GetInv(player)
+    local d = InvData[player]
+
+    if not d then
+        d = {
+            LastInvUpdate = 0,
+            EquippedOrder = {},
+            EquippedCounter = 0,
+        }
+        InvData[player] = d
+    end
+
+    return d
+end
+
+local function EnsureInvGui(d)
+    if not d.InvGui then
+        d.InvGui, d.InvSlots = BuildInventoryGui(OverlayGui, Config.INV_MAX_SLOTS)
+    end
+end
+
+local function EnsureAllGui(d)
+    if not d.AllGui then
+        d.AllGui, d.AllSlots, d.AllRows = BuildInventoryGui(OverlayGui, Config.INV_MAX_SLOTS)
+    end
+end
+
+local function HideInv(d)
+    if d.InvGui then
+        d.InvGui.Enabled = false
+    end
+
+    if d.AllGui then
+        d.AllGui.Enabled = false
+    end
+end
+
+local function RemoveInv(player)
+    local d = InvData[player]
+    if not d then return end
+
+    if d.InvGui then
+        pcall(function() d.InvGui:Destroy() end)
+    end
+
+    if d.AllGui then
+        pcall(function() d.AllGui:Destroy() end)
+    end
+
+    InvData[player] = nil
+end
+
+local function UpdatePlayerInventory(player, data, force)
+    local mode = Config.InvMode
+    if not mode or not data then return end
+
+    local gui = mode == "slots" and data.InvGui or data.AllGui
+    if not gui then return end
+
+    local now = os.clock()
+    if not force and now - data.LastInvUpdate < 0.25 then return end
+    data.LastInvUpdate = now
+
+    local equipped, backpack = GetInventoryList(player, data)
+    local combined = {}
+
+    for _, item in ipairs(equipped) do
+        table.insert(combined, {Tool = item.Tool, Held = true})
+    end
+
+    for _, item in ipairs(backpack) do
+        table.insert(combined, {Tool = item.Tool, Held = false})
+    end
+
+    local slots
+
+    if mode == "slots" then
+        slots = data.InvSlots
+    else
+        -- โหมดทั้งหมด: เพิ่มแถวตามจำนวนไอเทม (แถวละ 5 ช่อง)
+        local cols = Config.INV_MAX_SLOTS
+        local count = math.min(#combined, Config.INV_ALL_MAX)
+        local rows = math.max(1, math.ceil(count / cols))
+
+        if rows ~= data.AllRows then
+            local old = data.AllGui
+            local newGui, newSlots, newRows = BuildInventoryGui(OverlayGui, rows * cols)
+
+            newGui.Adornee = old.Adornee
+            newGui.Enabled = old.Enabled
+            old:Destroy()
+
+            data.AllGui, data.AllSlots, data.AllRows = newGui, newSlots, newRows
+        end
+
+        slots = data.AllSlots
+    end
+
+    for i, s in ipairs(slots) do
+        local entry = combined[i]
+
+        if entry and entry.Tool and entry.Tool.Parent then
+            SetSlot(s, entry.Tool, entry.Held and "held" or "bag")
+        else
+            SetSlot(s, nil, "empty")
+        end
+    end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    removeESP(player)
+    RemoveInv(player)
+end)
+
+-- ========== Render loop (Aim overlay + Inventory) ==========
+
+local lastOverlayError
+
+local function RenderOverlay()
+    FOVCircle.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
+    FOVCircle.Visible = Config.ShowFOV
+
+    GetTarget()
+
+    if Config.SilentAim and Config.ShowTracer then
+        TargetInfo.Visible = true
+        TargetLabel.Text = string.format("FOV: %d | Hook: %s", TargetCount, Hooked and "ON" or "OFF")
+
+        local shown = false
+
+        if CurrentTarget and CurrentTarget.Character then
+            local part = CurrentTarget.Character:FindFirstChild(Config.AimPart)
+                or CurrentTarget.Character:FindFirstChild("Head")
+
+            if part then
+                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+
+                if onScreen and pos.Z > 0 then
+                    local center = Vector2.new(
+                        Camera.ViewportSize.X / 2,
+                        Camera.ViewportSize.Y / 2
+                    )
+
+                    ShowAimLine(center, Vector2.new(pos.X, pos.Y))
+                    shown = true
+                end
+            end
+        end
+
+        if not shown then
+            HideAimLine()
+        end
+    else
+        HideAimLine()
+        TargetInfo.Visible = false
+    end
+
+    -- Inventory
+    local mode = Config.InvMode
+
+    if not mode then
+        for _, d in pairs(InvData) do
+            HideInv(d)
+        end
+        return
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local d = GetInv(player)
+            local char = player.Character
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            local root = char and (
+                char:FindFirstChild("HumanoidRootPart")
+                or char:FindFirstChild("Torso")
+                or char:FindFirstChild("UpperTorso")
+            )
+
+            local show = false
+
+            if char and humanoid and humanoid.Health > 0 and root then
+                local hidden = Config.TeamCheck
+                    and player.Team
+                    and LocalPlayer.Team
+                    and player.Team == LocalPlayer.Team
+
+                if not hidden
+                    and (root.Position - Camera.CFrame.Position).Magnitude > Config.InvDistance then
+                    hidden = true
+                end
+
+                if not hidden and Config.WallCheck then
+                    hidden = IsWallBlocked(
+                        Camera.CFrame.Position,
+                        root.Position,
+                        char
+                    )
+                end
+
+                show = not hidden
+            end
+
+            if show then
+                local gui
+
+                if mode == "slots" then
+                    EnsureInvGui(d)
+                    gui = d.InvGui
+
+                    if d.AllGui then
+                        d.AllGui.Enabled = false
+                    end
+                else
+                    EnsureAllGui(d)
+                    gui = d.AllGui
+
+                    if d.InvGui then
+                        d.InvGui.Enabled = false
+                    end
+                end
+
+                gui.Adornee = root
+                gui.Enabled = true
+                UpdatePlayerInventory(player, d)
+
+                -- gui อาจถูกสร้างใหม่ตอนจำนวนแถวเปลี่ยน
+                if mode == "all" and d.AllGui and d.AllGui ~= gui then
+                    d.AllGui.Adornee = root
+                    d.AllGui.Enabled = true
+                end
+            else
+                HideInv(d)
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    local ok, err = pcall(RenderOverlay)
+
+    if not ok and err ~= lastOverlayError then
+        lastOverlayError = err
+        warn("[Flexozy] Render error: " .. tostring(err))
+    end
+end)
+
+local function HookCharacterInventory(player)
+    local function hookContainer(container, isCharacter)
+        if not container then return end
+
+        container.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then
+                local data = GetInv(player)
+
+                if isCharacter then
+                    data.EquippedCounter += 1
+                    data.EquippedOrder[child] = data.EquippedCounter
+                end
+
+                if Config.InvMode then
+                    UpdatePlayerInventory(player, data, true)
+                end
+            end
+        end)
+
+        container.ChildRemoved:Connect(function(child)
+            if child:IsA("Tool") then
+                local data = InvData[player]
+
+                if data and Config.InvMode then
+                    UpdatePlayerInventory(player, data, true)
+                end
+            end
+        end)
+    end
+
+    if player.Character then
+        hookContainer(player.Character, true)
+    end
+
+    player.CharacterAdded:Connect(function(char)
+        hookContainer(char, true)
+    end)
+
+    local bp = player:FindFirstChild("Backpack")
+
+    if bp then
+        hookContainer(bp, false)
+    end
+
+    player.ChildAdded:Connect(function(child)
+        if child.Name == "Backpack" then
+            hookContainer(child, false)
+        end
+    end)
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        HookCharacterInventory(plr)
+    end
+end
+
+Players.PlayerAdded:Connect(HookCharacterInventory)
+
+print("[Flexozy] Loaded")
